@@ -37,7 +37,7 @@ test-bash: $(BPAN)
 
 .PHONY: test-python
 test-python:
-	$(RUNNER) pytest
+	PYTHONPATH=src:$(PYTHONPATH) $(RUNNER) pytest
 
 test-online:
 	dry_run=1 bash -x ./openqa-label-known-issues-multi < ./tests/incompletes
@@ -103,7 +103,7 @@ check-maintainability:
 	@$(RUNNER) radon mi ${PY_FILES} -n B | (! grep ".")
 .PHONY: test-with-coverage
 test-with-coverage:
-	$(RUNNER) pytest --cov=src/os-autoinst-scripts tests/
+	PYTHONPATH=src:$(PYTHONPATH) $(RUNNER) pytest --cov=src/os-autoinst-scripts tests/
 
 .PHONY: install-python-deps
 install-python-deps:
