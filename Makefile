@@ -1,6 +1,7 @@
 SH_FILES ?= $(shell file --mime-type $$(git ls-files) test/*.t | sed -n 's/^\(.*\):.*text\/x-shellscript.*$$/\1/p')
 SH_SHELLCHECK_FILES ?= $(shell file --mime-type * | sed -n 's/^\(.*\):.*text\/x-shellscript.*$$/\1/p')
 PY_FILES ?= $(shell git ls-files | xargs file --mime-type 2>/dev/null | grep -E 'text/x-script\.python|text/x-python' | cut -d: -f1)
+RUNNER ?= uv run
 
 ifndef CI
 include .setup.mk
@@ -35,7 +36,7 @@ test-bash: $(BPAN)
 	"${PROVE}" -r $(if $v,-v )$(test)
 
 test-python:
-	py.test tests
+	PYTHONPATH=src:$(PYTHONPATH) $(RUNNER) py.test tests
 
 test-online:
 	dry_run=1 bash -x ./openqa-label-known-issues-multi < ./tests/incompletes
@@ -61,7 +62,7 @@ test-yaml:
 checkstyle-python: check-ruff check-conventions check-ty
 check-ruff:
 	@which ruff >/dev/null 2>&1 || echo "Command 'ruff' not found, can not execute python style checks"
-	@if [ -n "$(PY_FILES)" ]; then ruff format --check $(PY_FILES) && ruff check $(PY_FILES); fi
+	@if [ -n "$(PY_FILES)" ]; then $(RUNNER) ruff format --check $(PY_FILES) && $(RUNNER) ruff check $(PY_FILES); fi
 
 check-conventions:
 	@if git grep -nE '^\s*@(unittest\.mock\.|mock\.)?patch' tests/; then \
@@ -76,7 +77,15 @@ check-ty: ## Run ty type checker
 
 check-code-health:
 	@echo "Checking code health…"
-	@vulture $$(git ls-files "**.py") --min-confidence 80
+	@$(RUNNER) vulture $$(git ls-files "**.py") --min-confidence 80
+
+.PHONY: test-with-coverage
+test-with-coverage:
+	PYTHONPATH=src:$(PYTHONPATH) $(RUNNER) pytest --cov=src/os-autoinst-scripts tests/
+
+.PHONY: install-python-deps
+install-python-deps:
+	$(RUNNER) pip install -e .[dev]
 
 .PHONY: test-gitlint
 test-gitlint: ## Run commit message checks using gitlint
