@@ -20,7 +20,7 @@ def test_send_message_success(mock_post: MagicMock) -> None:
     )
     server_url = "example.com"
     message_body = "Hello from test!"
-    access_token = "test_token"
+    access_token = "test_token"  # noqa: S105
     room_id = "test_room"
 
     # Act
@@ -51,7 +51,7 @@ def test_send_message_matrix_error(mock_post: MagicMock) -> None:
     )
     server_url = "example.com"
     message_body = "Hello from test!"
-    access_token = "test_token"
+    access_token = "test_token"  # noqa: S105
     room_id = "test_room"
 
     # Act
@@ -76,7 +76,7 @@ def test_send_message_http_error(mock_post: MagicMock) -> None:
     mock_post.side_effect = raise_http_error
     server_url = "example.com"
     message_body = "Hello from test!"
-    access_token = "test_token"
+    access_token = "test_token"  # noqa: S105
     room_id = "test_room"
 
     # Act
@@ -97,7 +97,7 @@ def test_send_message_network_error(mock_post: MagicMock) -> None:
     )
     server_url = "example.com"
     message_body = "Hello from test!"
-    access_token = "test_token"
+    access_token = "test_token"  # noqa: S105
     room_id = "test_room"
 
     # Act
