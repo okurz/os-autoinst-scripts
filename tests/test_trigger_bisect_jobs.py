@@ -52,7 +52,7 @@ def mocked_fetch_url(url: str, request_type: str = "text") -> Any:
     return content
 
 
-def mocked_call(cmds: list[str], *, dry_run: bool = False) -> list[str]:
+def mocked_call(cmds: list[str]) -> list[str]:
     return cmds
 
 
