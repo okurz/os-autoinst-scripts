@@ -31,8 +31,9 @@ def test_send_message_success(mock_post: MagicMock) -> None:
     assert "[+] Message sent!" in result.stdout
     mock_post.assert_called_once()
     assert mock_post.call_args.args[0] == (
-        f"https://{server_url}/_matrix/client/r0/rooms/{room_id}/send/m.room.message?access_token={access_token}"
+        f"https://{server_url}/_matrix/client/r0/rooms/{room_id}/send/m.room.message"
     )
+    assert mock_post.call_args.kwargs["headers"] == {"Authorization": f"Bearer {access_token}"}
     assert mock_post.call_args.kwargs["json"] == {
         "msgtype": "m.text",
         "body": message_body,
@@ -67,7 +68,7 @@ def test_send_message_matrix_error(mock_post: MagicMock) -> None:
 @patch("httpx.post")
 def test_send_message_http_error(mock_post: MagicMock) -> None:
     # Arrange
-    def raise_http_error(headers: dict[str, str], json: dict[str, Any]) -> NoReturn:
+    def raise_http_error(url: str, headers: dict[str, str], json: dict[str, Any]) -> NoReturn:
         response = httpx.Response(404, request=httpx.Request("POST", "http://example.com"))
         response.text = "Not Found"
         msg = "Not Found"
