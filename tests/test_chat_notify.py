@@ -1,11 +1,11 @@
 # Copyright (c) 2024 SUSE LLC
+from typing import NoReturn
 from unittest.mock import MagicMock, patch
 
 import httpx
 from typer.testing import CliRunner
 
 from os_autoinst_scripts.chat_notify import app
-from typing import Any, NoReturn
 
 runner = CliRunner()
 
