@@ -5,7 +5,7 @@ import httpx
 from typer.testing import CliRunner
 
 from os_autoinst_scripts.chat_notify import app
-from typing import NoReturn
+from typing import Any, NoReturn
 
 runner = CliRunner()
 
@@ -30,7 +30,7 @@ def test_send_message_success(mock_post: MagicMock) -> None:
     assert result.exit_code == 0
     assert "[+] Message sent!" in result.stdout
     mock_post.assert_called_once()
-    assert mock_post.call_args.kwargs["url"] == (
+    assert mock_post.call_args.args[0] == (
         f"https://{server_url}/_matrix/client/r0/rooms/{room_id}/send/m.room.message?access_token={access_token}"
     )
     assert mock_post.call_args.kwargs["json"] == {
@@ -67,7 +67,7 @@ def test_send_message_matrix_error(mock_post: MagicMock) -> None:
 @patch("httpx.post")
 def test_send_message_http_error(mock_post: MagicMock) -> None:
     # Arrange
-    def raise_http_error() -> NoReturn:
+    def raise_http_error(headers: dict[str, str], json: dict[str, Any]) -> NoReturn:
         response = httpx.Response(404, request=httpx.Request("POST", "http://example.com"))
         response.text = "Not Found"
         msg = "Not Found"
