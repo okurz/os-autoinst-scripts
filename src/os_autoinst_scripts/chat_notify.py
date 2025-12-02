@@ -29,10 +29,10 @@ def send_message(server_url: str, message_body: str, access_token: str, room_id:
         typer.secho("[+] Message sent!", fg=typer.colors.GREEN)
     except httpx.HTTPStatusError as e:
         typer.secho(f"[!] HTTP error sending message: {e}", err=True, fg=typer.colors.RED)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     except httpx.RequestError as e:
         typer.secho(f"[!] Network error sending message: {e}", err=True, fg=typer.colors.RED)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @app.command()
