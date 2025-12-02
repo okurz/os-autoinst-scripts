@@ -94,7 +94,7 @@ def test_catch_called_process_error(caplog: pytest.LogCaptureFixture) -> None:
 
 def test_clone() -> None:
     openqa.call = MagicMock(side_effect=mocked_call)
-    openqa.openqa_clone(cmds, dry_run=False)
+    openqa.openqa_clone(cmds)
     args = [
         "openqa-clone-job",
         "--skip-chained-deps",
@@ -111,7 +111,7 @@ def test_clone() -> None:
 
 def test_comment() -> None:
     openqa.call = MagicMock(side_effect=mocked_call)
-    openqa.openqa_comment(1234567, "https://openqa.opensuse.org", "foo\nbar", dry_run=False)
+    openqa.openqa_comment(1234567, "https://openqa.opensuse.org", "foo\nbar")
     args = [
         "openqa-cli",
         "api",
@@ -129,7 +129,7 @@ def test_comment() -> None:
 
 def test_set_job_prio() -> None:
     openqa.call = MagicMock(side_effect=mocked_call)
-    openqa.openqa_set_job_prio(1234567, "https://openqa.opensuse.org", 42, dry_run=False)
+    openqa.openqa_set_job_prio(1234567, "https://openqa.opensuse.org", 42)
     args = [
         "openqa-cli",
         "api",
