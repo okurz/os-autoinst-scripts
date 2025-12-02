@@ -68,7 +68,7 @@ def test_send_message_matrix_error(mock_post: MagicMock) -> None:
 @patch("httpx.post")
 def test_send_message_http_error(mock_post: MagicMock) -> None:
     # Arrange
-    def raise_http_error(url: str, headers: dict[str, str], json: dict[str, Any]) -> NoReturn:
+    def raise_http_error() -> NoReturn:
         response = httpx.Response(404, request=httpx.Request("POST", "http://example.com"))
         response.text = "Not Found"
         msg = "Not Found"
