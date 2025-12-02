@@ -45,7 +45,10 @@ def mocked_fetch_url(url: str, request_type: str = "text") -> Any:
         path = "tests/data/python-requests/" + path
         content = pathlib.Path(path).read_text(encoding="utf-8")
     if request_type == "json":
-        return json.loads(content)
+        json_content = json.loads(content)
+        if "job" in json_content:
+            json_content["job"]["priority"] = 100
+        return json_content
     return content
 
 
