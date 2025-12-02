@@ -106,7 +106,7 @@ def test_clone() -> None:
         "OPENQA_INVESTIGATE_ORIGIN=https://openqa.opensuse.org/tests/7848818",
         "_GROUP=0",
     ]
-    openqa.call.assert_called_once_with(args, dry_run=False)
+    openqa.call.assert_called_once_with(args)
 
 
 def test_comment() -> None:
@@ -124,7 +124,7 @@ def test_comment() -> None:
         "jobs/1234567/comments",
         "text=foo\nbar",
     ]
-    openqa.call.assert_called_once_with(args, dry_run=False)
+    openqa.call.assert_called_once_with(args)
 
 
 def test_set_job_prio() -> None:
@@ -144,7 +144,7 @@ def test_set_job_prio() -> None:
         "PUT",
         "jobs/1234567",
     ]
-    openqa.call.assert_called_once_with(args, dry_run=False)
+    openqa.call.assert_called_once_with(args)
 
 
 def test_triggers() -> None:
