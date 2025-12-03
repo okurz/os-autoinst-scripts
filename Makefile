@@ -93,6 +93,14 @@ test-gitlint: ## Run commit message checks using gitlint
 	BASE=$$(git merge-base --independent $$BASES | head -n 1); \
 	gitlint --commits "$$BASE..HEAD"
 
+.PHONY: typecheck
+typecheck:
+	PYRIGHT_PYTHON_FORCE_VERSION=latest $(RUNNER) pyright --skipunannotated --warnings
+
+.PHONY: check-maintainability
+check-maintainability:
+	@echo "Checking maintainability (grade B or worse) …"
+	@$(RUNNER) radon mi ${PY_FILES} -n B | (! grep ".")
 .PHONY: test-with-coverage
 test-with-coverage:
 	$(RUNNER) pytest --cov=src/os-autoinst-scripts tests/
