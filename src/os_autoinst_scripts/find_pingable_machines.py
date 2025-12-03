@@ -1,4 +1,5 @@
-# Copyright (c) SUSE LLC
+#!/usr/bin/python3
+# Copyright SUSE LLC
 import subprocess  # noqa: S404
 
 import requests
