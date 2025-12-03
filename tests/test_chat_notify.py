@@ -1,4 +1,4 @@
-# Copyright (c) 2024 SUSE LLC
+# Copyright SUSE LLC
 from typing import NoReturn
 from unittest.mock import MagicMock, patch
 
