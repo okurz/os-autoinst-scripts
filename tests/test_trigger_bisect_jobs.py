@@ -37,11 +37,11 @@ def args_factory() -> Namespace:
 
 def mocked_fetch_url(url: str, request_type: str = "text") -> Any:
     content = ""
-    parsed = urlparse(url)
+    url_parsed = urlparse(url)
 
-    if parsed.scheme in {"http", "https"}:
-        path = parsed.geturl()
-        path = path[len(parsed.scheme) + 3 :]
+    if url_parsed.scheme in {"http", "https"}:
+        path = url_parsed.geturl()
+        path = path[len(url_parsed.scheme) + 3 :]
         path = "tests/data/python-requests/" + path
         content = pathlib.Path(path).read_text(encoding="utf-8")
     if request_type == "json":
@@ -69,23 +69,23 @@ def test_catch_called_process_error(caplog: pytest.LogCaptureFixture) -> None:
     openqa.fetch_url = MagicMock(side_effect=mocked_fetch_url)
     exp_err = "returned non-zero exit status 255."
     error = subprocess.CompletedProcess(args=[], returncode=255, stderr=exp_err, stdout="")
-    with patch("subprocess.run", return_value=error), pytest.raises(subprocess.CalledProcessError) as e:
+    with patch("subprocess.run", return_value=error), pytest.raises(subprocess.CalledProcessError) as exc:
         openqa.main(args)
 
-    assert e.value.returncode == 255
-    assert f"{exp_err}" in str(e.value.stderr)
+    assert exc.value.returncode == 255
+    assert f"{exp_err}" in str(exc.value.stderr)
 
     exp_err = "Current job 7848818 will fail, because the repositories for the below updates are unavailable"
     error.stderr = exp_err
     comment_process = subprocess.CompletedProcess(args=[], returncode=0, stderr="", stdout=b"doo")
     with patch("subprocess.run", side_effect=[error, comment_process]) as mocked:
-        with pytest.raises(SystemExit) as e:
+        with pytest.raises(SystemExit) as exc:
             openqa.main(args)
         assert re.search(
             r"jobs/.*/comments.*text=.*updates are unavailable",
             str(mocked.call_args_list[-1][0]),
         )
-    assert e.value.code == 0
+    assert exc.value.code == 0
     assert f"{exp_err}" in caplog.text
 
 
@@ -103,7 +103,7 @@ def test_clone() -> None:
         "OPENQA_INVESTIGATE_ORIGIN=https://openqa.opensuse.org/tests/7848818",
         "_GROUP=0",
     ]
-    openqa.call.assert_called_once_with(args, False)
+    openqa.call.assert_called_once_with(args, dry_run=False)
 
 
 def test_comment() -> None:
@@ -121,7 +121,7 @@ def test_comment() -> None:
         "jobs/1234567/comments",
         "text=foo\nbar",
     ]
-    openqa.call.assert_called_once_with(args, False)
+    openqa.call.assert_called_once_with(args, dry_run=False)
 
 
 def test_set_job_prio() -> None:
@@ -141,7 +141,7 @@ def test_set_job_prio() -> None:
         "PUT",
         "jobs/1234567",
     ]
-    openqa.call.assert_called_once_with(args, False)
+    openqa.call.assert_called_once_with(args, dry_run=False)
 
 
 def test_triggers() -> None:
@@ -162,7 +162,7 @@ def test_triggers() -> None:
                 "OPENQA_INVESTIGATE_ORIGIN=https://openqa.opensuse.org/tests/7848818",
                 "MAINT_TEST_REPO=",
             ],
-            False,
+            dry_run=False,
         ),
         call(
             [
@@ -173,7 +173,7 @@ def test_triggers() -> None:
                 "OPENQA_INVESTIGATE_ORIGIN=https://openqa.opensuse.org/tests/7848818",
                 "MAINT_TEST_REPO=",
             ],
-            False,
+            dry_run=False,
         ),
         call(
             [
@@ -184,7 +184,7 @@ def test_triggers() -> None:
                 "OPENQA_INVESTIGATE_ORIGIN=https://openqa.opensuse.org/tests/7848818",
                 "MAINT_TEST_REPO=",
             ],
-            False,
+            dry_run=False,
         ),
         call(
             [
@@ -195,7 +195,7 @@ def test_triggers() -> None:
                 "OPENQA_INVESTIGATE_ORIGIN=https://openqa.opensuse.org/tests/7848818",
                 "MAINT_TEST_REPO=",
             ],
-            False,
+            dry_run=False,
         ),
         call(
             [
@@ -206,17 +206,24 @@ def test_triggers() -> None:
                 "OPENQA_INVESTIGATE_ORIGIN=https://openqa.opensuse.org/tests/7848818",
                 "MAINT_TEST_REPO=",
             ],
-            False,
+            dry_run=False,
         ),
     ]
     assert sorted(calls) == sorted(openqa.openqa_clone.call_args_list)
     openqa.openqa_comment.assert_called_once_with(
         7848818,
         "https://openqa.opensuse.org",
-        "Automatic bisect jobs:\n\n* **foo:investigate:bisect_without_3**: https://openqa.opensuse.org/t234567\n* **foo:investigate:bisect_without_4**: https://openqa.opensuse.org/t234567\n* **foo:investigate:bisect_without_21637**: https://openqa.opensuse.org/t234567\n* **foo:investigate:bisect_without_22085**: https://openqa.opensuse.org/t234567\n* **foo:investigate:bisect_without_22192**: https://openqa.opensuse.org/t234567\n",
-        False,
+        (
+            "Automatic bisect jobs:\n\n* **foo:investigate:bisect_without_3**: "
+            "https://openqa.opensuse.org/t234567\n* **foo:investigate:bisect_without_4**: "
+            "https://openqa.opensuse.org/t234567\n* **foo:investigate:bisect_without_21637**: "
+            "https://openqa.opensuse.org/t234567\n* **foo:investigate:bisect_without_22085**: "
+            "https://openqa.opensuse.org/t234567\n* **foo:investigate:bisect_without_22192**: "
+            "https://openqa.opensuse.org/t234567\n"
+        ),
+        dry_run=False,
     )
-    prio_calls = 5 * [call(234567, "https://openqa.opensuse.org/tests/7848818", 150, False)]
+    prio_calls = 5 * [call(234567, "https://openqa.opensuse.org/tests/7848818", 150, dry_run=False)]
     assert prio_calls == openqa.openqa_set_job_prio.call_args_list
 
 
@@ -226,11 +233,9 @@ def test_problems() -> None:
     openqa.fetch_url = MagicMock(side_effect=mocked_fetch_url)
 
     args.url = "http://openqa.opensuse.org/tests/123"
-    try:
+    with pytest.raises(json.decoder.JSONDecodeError) as exc:
         openqa.main(args)
-        raise AssertionError
-    except json.decoder.JSONDecodeError as e:
-        assert str(e) == "Expecting value: line 1 column 1 (char 0)"
+    assert str(exc.value) == "Expecting value: line 1 column 1 (char 0)"
 
     args.url = "http://openqa.opensuse.org/tests/1234"
     openqa.main(args)
