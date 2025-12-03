@@ -1,4 +1,4 @@
-# Copyright (c) SUSE LLC
+# Copyright SUSE LLC
 import os
 from getpass import getpass
 
