@@ -1,4 +1,4 @@
-# Copyright (c) 2024 SUSE LLC
+# Copyright SUSE LLC
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
