@@ -32,7 +32,7 @@ def main() -> None:
             if result.returncode == 0:
                 console.print(f"{fqdn} up", style="green")
                 found_machines += 1
-        except subprocess.SubprocessError as e:
+        except subprocess.SubprocessError as e:  # noqa: PERF203
             console.print(f"Error pinging {fqdn}: {e}", style="bold red")
 
     if found_machines > 0:
