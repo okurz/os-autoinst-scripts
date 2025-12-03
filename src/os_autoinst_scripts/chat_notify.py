@@ -1,5 +1,4 @@
-# Copyright (c) 2024 SUSE LLC
-
+# Copyright SUSE LLC
 import httpx
 import typer
 
