@@ -51,7 +51,7 @@ def get_package_name(req: str) -> str:
     try:
         package = req.split(" ")[0]
         output = osc_cmd.se("--package", package).stdout.decode()
-        return output.split("'"[1]
+        return output.split("'")[1]
     except (ErrorReturnCode, IndexError):
         return ""
 
