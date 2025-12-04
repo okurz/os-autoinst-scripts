@@ -1,6 +1,5 @@
 # Copyright SUSE LLC
 import json
-import pathlib
 from unittest.mock import MagicMock
 
 from pytest_mock import MockerFixture
@@ -74,11 +73,12 @@ def test_set_due_date_from_file(mocker: MockerFixture) -> None:
             }
         ]
     }
-    with pathlib.Path("test.json").open("w", encoding="utf-8") as f:
+    with open("test.json", "w") as f:
         json.dump(issues, f)
 
     result = runner.invoke(
-        app, ["--redmine-api-key", "dummy-key", "--dry-run", "--issues-file", "test.json"]
+        app,
+        ["main", "--redmine-api-key", "dummy-key", "--dry-run", "--issues-file", "test.json"],
     )
 
     assert result.exit_code == 0
