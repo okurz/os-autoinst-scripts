@@ -11,26 +11,45 @@ from typing import List, Optional
 import httpx
 from rich.console import Console
 from sh import (
-    basename,
+    basename as sh_basename,
     CommandNotFound,
-    cut,
+    cut as sh_cut,
     ErrorReturnCode,
-    git,
-    git_obs,
-    grep,
-    nc,
-    openqa_cli,
-    osc,
-    ping,
-    rpmspec,
-    sed,
-    sort,
-    ssh,
-    tr,
-    zypper,
+    git as sh_git,
+    git_obs as sh_git_obs,
+    grep as sh_grep,
+    head as sh_head,
+    nc as sh_nc,
+    openqa_cli as sh_openqa_cli,
+    osc as sh_osc,
+    ping as sh_ping,
+    rpmspec as sh_rpmspec,
+    sed as sh_sed,
+    sort as sh_sort,
+    ssh as sh_ssh,
+    tr as sh_tr,
+    zypper as sh_zypper,
 )
 
 console = Console()
+
+# Expose sh commands as top-level functions
+basename = sh_basename
+cut = sh_cut
+git = sh_git
+git_obs = sh_git_obs
+grep = sh_grep
+head = sh_head
+nc = sh_nc
+openqa_cli = sh_openqa_cli
+osc = sh_osc
+ping = sh_ping
+rpmspec = sh_rpmspec
+sed = sh_sed
+sort = sh_sort
+ssh = sh_ssh
+tr = sh_tr
+zypper = sh_zypper
 
 OSC = "osc"  # Assuming osc is installed and in PATH
 OPENQA_CLI = "openqa-cli"  # Assuming openqa-cli is installed and in PATH
