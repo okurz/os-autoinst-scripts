@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""Trigger test to generate pflash vars image
-"""
+"""Trigger test to generate pflash vars image"""
+
 import os
 import sys
 
 import typer
-from os_autoinst_scripts._common import console, openqa_cli, ErrorReturnCode
+
+from os_autoinst_scripts._common import ErrorReturnCode, console, openqa_cli
 
 app = typer.Typer()
 
 
-def find_latest_published_tumbleweed_image(
-    group_id: int, arch: str, machine: str, image_type: str
-) -> str:
+def find_latest_published_tumbleweed_image(group_id: int, arch: str, machine: str, image_type: str) -> str:
     # This is a placeholder for the actual implementation
     return "openSUSE-Tumbleweed-DVD-x86_64-Snapshot20240101-Media.iso"
 
@@ -31,8 +30,7 @@ def main(
     openqa_api_key: str = typer.Option(..., envvar="OPENQA_API_KEY", help="openQA API key"),
     openqa_api_secret: str = typer.Option(..., envvar="OPENQA_API_SECRET", help="openQA API secret"),
 ) -> None:
-    """Trigger test to generate pflash vars image.
-    """
+    """Trigger test to generate pflash vars image."""
     image = find_latest_published_tumbleweed_image(tw_group_id, arch, machine, "iso")
 
     cli_args: List[str] = []

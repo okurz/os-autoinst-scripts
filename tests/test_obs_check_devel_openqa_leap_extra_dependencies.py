@@ -10,13 +10,9 @@ runner = CliRunner()
 
 
 def test_check_reasons(mocker: MockerFixture) -> None:
-    mock_osc = mocker.patch(
-        "os_autoinst_scripts.obs_check_devel_openqa_leap_extra_dependencies.osc"
-    )
+    mock_osc = mocker.patch("os_autoinst_scripts.obs_check_devel_openqa_leap_extra_dependencies.osc")
     mock_osc.bake.return_value = mock_osc
-    mock_osc.search.return_value = MagicMock(
-        stdout=b"devel:openQA:Leap:15.5\ndevel:openQA:Leap:15.6"
-    )
+    mock_osc.search.return_value = MagicMock(stdout=b"devel:openQA:Leap:15.5\ndevel:openQA:Leap:15.6")
     mock_osc.list.side_effect = [
         MagicMock(stdout=b"package1\npackage2"),
         MagicMock(stdout=b"package3"),
@@ -37,13 +33,9 @@ def test_check_reasons(mocker: MockerFixture) -> None:
 
 
 def test_check_reasons_all_ok(mocker: MockerFixture) -> None:
-    mock_osc = mocker.patch(
-        "os_autoinst_scripts.obs_check_devel_openqa_leap_extra_dependencies.osc"
-    )
+    mock_osc = mocker.patch("os_autoinst_scripts.obs_check_devel_openqa_leap_extra_dependencies.osc")
     mock_osc.bake.return_value = mock_osc
-    mock_osc.search.return_value = MagicMock(
-        stdout=b"devel:openQA:Leap:15.5\ndevel:openQA:Leap:15.6"
-    )
+    mock_osc.search.return_value = MagicMock(stdout=b"devel:openQA:Leap:15.5\ndevel:openQA:Leap:15.6")
     mock_osc.list.side_effect = [
         MagicMock(stdout=b"package1\npackage2"),
         MagicMock(stdout=b"package3"),

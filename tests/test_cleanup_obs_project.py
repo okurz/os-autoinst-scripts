@@ -17,12 +17,10 @@ def test_cleanup_obs_project_success(mocker: MockerFixture) -> None:
 
     assert result.exit_code == 0
     mock_osc.ls.assert_called_once_with("my-project")
-    mock_osc.rdelete.assert_has_calls(
-        [
-            call("-m", "Cleaning up package1 from my-project", "my-project", "package1"),
-            call("-m", "Cleaning up package2 from my-project", "my-project", "package2"),
-        ]
-    )
+    mock_osc.rdelete.assert_has_calls([
+        call("-m", "Cleaning up package1 from my-project", "my-project", "package1"),
+        call("-m", "Cleaning up package2 from my-project", "my-project", "package2"),
+    ])
 
 
 def test_cleanup_obs_project_no_confirmation(mocker: MockerFixture) -> None:

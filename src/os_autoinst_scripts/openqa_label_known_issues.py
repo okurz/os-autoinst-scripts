@@ -1,24 +1,16 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script labels known issues in openQA.
-"""
-import os
+"""The script labels known issues in openQA."""
+
 import re
-import sys
 from typing import List, Optional
 
 import httpx
 import typer
+
 from os_autoinst_scripts._common import (
-    console,
     log_error,
-    log_info,
-    log_warn,
     openqa_api_get,
-    openqa_api_post,
-    openqa_api_put,
-    openqa_api_delete,
     runcurl,
 )
 
@@ -100,8 +92,9 @@ def handle_unreviewed(
     # Placeholder for the actual implementation
     pass
 
+
 def investigate_issue(testurl: str, settings: Settings, issues: List[dict]) -> None:
-    job_id = int(testurl.split("/")[-1])
+    job_id = int(testurl.rsplit("/", maxsplit=1)[-1])
     try:
         job_data = openqa_api_get(f"jobs/{job_id}", settings.host_url)
     except httpx.HTTPStatusError as e:
@@ -128,9 +121,7 @@ def investigate_issue(testurl: str, settings: Settings, issues: List[dict]) -> N
             if ":force_result:" in search_term:
                 force_result = search_term.split(":force_result:")[1]
             if len(search_term) >= settings.min_search_term:
-                if label_on_issue(
-                    job_id, search_term, f'poo#{issue["id"]}', False, force_result, settings
-                ):
+                if label_on_issue(job_id, search_term, f"poo#{issue['id']}", False, force_result, settings):
                     return
 
     # Issues without tickets
@@ -172,9 +163,7 @@ def label_issue(
     openqa_cli_retry_sleep_time_s: int = typer.Option(120),
     mojo_connect_timeout: int = typer.Option(30),
 ) -> None:
-    """
-    Label known issues in openQA.
-    """
+    """Label known issues in openQA."""
     settings = Settings(
         host=host,
         scheme=scheme,

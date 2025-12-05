@@ -1,6 +1,7 @@
 # Copyright SUSE LLC
 import json
-from unittest.mock import MagicMock, call
+import pathlib
+from unittest.mock import MagicMock
 
 from pytest_mock import MockerFixture
 from typer.testing import CliRunner
@@ -13,28 +14,24 @@ runner = CliRunner()
 def test_monitor_openqa_job_success(mocker: MockerFixture) -> None:
     mock_openqa_cli = mocker.patch("os_autoinst_scripts.monitor_openqa_job.openqa_cli")
     mock_job_ids = mocker.patch("os_autoinst_scripts.monitor_openqa_job.job_ids")
-    mock_delete_packages = mocker.patch(
-        "os_autoinst_scripts.monitor_openqa_job.delete_packages_from_obs_project"
-    )
+    mock_delete_packages = mocker.patch("os_autoinst_scripts.monitor_openqa_job.delete_packages_from_obs_project")
 
     mock_job_ids.return_value = ["123"]
     mock_openqa_cli.side_effect = [
         MagicMock(),  # openqa-cli monitor call
         MagicMock(  # openqa-cli api jobs/123 call
-            stdout=json.dumps(
-                {
-                    "job": {
-                        "id": 123,
-                        "result": "passed",
-                        "settings": {"VERSION": "15-SP4"},
-                    }
+            stdout=json.dumps({
+                "job": {
+                    "id": 123,
+                    "result": "passed",
+                    "settings": {"VERSION": "15-SP4"},
                 }
-            ).encode(),
+            }).encode(),
         ),
     ]
 
     # Create a dummy job_post_response file
-    with open("job_post_response", "w") as f:
+    with pathlib.Path("job_post_response").open("w") as f:
         f.write("123\n")
 
     result = runner.invoke(app, ["job_post_response"])
@@ -48,30 +45,26 @@ def test_monitor_openqa_job_success(mocker: MockerFixture) -> None:
 def test_monitor_openqa_job_failure(mocker: MockerFixture) -> None:
     mock_openqa_cli = mocker.patch("os_autoinst_scripts.monitor_openqa_job.openqa_cli")
     mock_job_ids = mocker.patch("os_autoinst_scripts.monitor_openqa_job.job_ids")
-    mock_delete_packages = mocker.patch(
-        "os_autoinst_scripts.monitor_openqa_job.delete_packages_from_obs_project"
-    )
+    mock_delete_packages = mocker.patch("os_autoinst_scripts.monitor_openqa_job.delete_packages_from_obs_project")
     mock_osc = mocker.patch("os_autoinst_scripts.monitor_openqa_job.osc")
 
     mock_job_ids.return_value = ["123"]
     mock_openqa_cli.side_effect = [
         MagicMock(),  # openqa-cli monitor call
         MagicMock(  # openqa-cli api jobs/123 call
-            stdout=json.dumps(
-                {
-                    "job": {
-                        "id": 123,
-                        "result": "failed",
-                        "settings": {"VERSION": "15-SP4"},
-                    }
+            stdout=json.dumps({
+                "job": {
+                    "id": 123,
+                    "result": "failed",
+                    "settings": {"VERSION": "15-SP4"},
                 }
-            ).encode(),
+            }).encode(),
         ),
     ]
     mock_osc.return_value = MagicMock(stdout=b"<comments></comments>")
 
     # Create a dummy job_post_response file
-    with open("job_post_response", "w") as f:
+    with pathlib.Path("job_post_response").open("w") as f:
         f.write("123\n")
 
     result = runner.invoke(

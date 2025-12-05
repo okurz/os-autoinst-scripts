@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-"hook script" intended to be called by openQA instances taking a job ID as
+""" "hook script" intended to be called by openQA instances taking a job ID as
 parameter and forwarding a complete job URL to "openqa-label-known-issues"
 on stdin and all left unknowns to "openqa-investigate"
 """
-import json
+
 import re
-import sys
 from typing import Optional
 
 import httpx
 import typer
-from os_autoinst_scripts._common import console, log_error, runcli, ErrorReturnCode
+
+from os_autoinst_scripts._common import ErrorReturnCode, log_error, runcli
 
 app = typer.Typer()
 
@@ -39,9 +38,7 @@ def investigate_and_bisect(test_url: str) -> int:
 
 def label(url: str) -> Optional[str]:
     try:
-        result = runcli(
-            ["openqa-label-known-issues", url], check=True
-        )
+        result = runcli(["openqa-label-known-issues", url], check=True)
         match = re.search(r"\[([^]]*)\].*Unknown test issue, to be reviewed.*", result)
         if match:
             return match.group(1)
@@ -52,8 +49,7 @@ def label(url: str) -> Optional[str]:
 
 @app.command()
 def hook(job_id: int = typer.Argument(..., help="Job ID")) -> None:
-    """
-    Act as a hook for openQA instances, labeling known issues and triggering
+    """Act as a hook for openQA instances, labeling known issues and triggering
     investigations or bisections.
     """
     url = f"{HOST_URL}/tests/{job_id}"

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script investigates openQA jobs.
-"""
+"""The script investigates openQA jobs."""
+
 import json
 import re
 import subprocess
@@ -66,7 +65,7 @@ class Settings:
 
 def run_openqa_cli(args: List[str], dry_run: bool = False) -> str:
     if dry_run:
-        console.print(f"Would run: openqa-cli {" ".join(args)}")
+        console.print(f"Would run: openqa-cli {' '.join(args)}")
         return json.dumps({"42": 42})
     try:
         result = subprocess.run(["openqa-cli"] + args, capture_output=True, text=True, check=True)
@@ -79,20 +78,28 @@ def run_openqa_cli(args: List[str], dry_run: bool = False) -> str:
 def client_get_job(job_id: int, settings: Settings) -> dict:
     return json.loads(run_openqa_cli(["api", "--host", settings.host_url, f"jobs/{job_id}"]))
 
+
 def client_put_job_comment(job_id: int, comment_id: int, comment: str, settings: Settings) -> None:
-    run_openqa_cli(
-        ["api", "--host", settings.host_url, "-X", "PUT", f"jobs/{job_id}/comments/{comment_id}", f"text={comment}"]
-    )
+    run_openqa_cli([
+        "api",
+        "--host",
+        settings.host_url,
+        "-X",
+        "PUT",
+        f"jobs/{job_id}/comments/{comment_id}",
+        f"text={comment}",
+    ])
+
 
 def client_post_job_comment(job_id: int, comment: str, settings: Settings) -> dict:
     return json.loads(
-        run_openqa_cli(
-            ["api", "--host", settings.host_url, "-X", "POST", f"jobs/{job_id}/comments", f"text={comment}"]
-        )
+        run_openqa_cli(["api", "--host", settings.host_url, "-X", "POST", f"jobs/{job_id}/comments", f"text={comment}"])
     )
+
 
 def client_delete_job_comment(job_id: int, comment_id: int, settings: Settings) -> None:
     run_openqa_cli(["api", "--host", settings.host_url, "-X", "DELETE", f"jobs/{job_id}/comments/{comment_id}"])
+
 
 def fetch_vars_json(job_id: int, settings: Settings) -> dict:
     try:
@@ -103,6 +110,7 @@ def fetch_vars_json(job_id: int, settings: Settings) -> dict:
         console.print(f"[bold red]Error fetching vars.json: {e}[/bold red]")
         raise typer.Exit(1)
 
+
 def get_dependencies_ajax(job_id: int, settings: Settings) -> dict:
     try:
         response = httpx.get(f"{settings.host_url}/tests/{job_id}/dependencies_ajax")
@@ -112,16 +120,22 @@ def get_dependencies_ajax(job_id: int, settings: Settings) -> dict:
         console.print(f"[bold red]Error fetching dependencies_ajax: {e}[/bold red]")
         raise typer.Exit(1)
 
+
 def is_finished(state: str) -> bool:
     return state in ["done", "cancelled"]
+
 
 def is_ok(result: str) -> bool:
     return result in ["passed", "softfailed"]
 
+
 def is_cancelled(result: str) -> bool:
     return result in ["none", "skipped", "user_cancelled", "user_restarted", "parallel_restarted"]
 
-def clone_job(origin_job_id: int, job_id_to_clone: int, name_suffix: str, refspec: Optional[str], settings: Settings) -> str:
+
+def clone_job(
+    origin_job_id: int, job_id_to_clone: int, name_suffix: str, refspec: Optional[str], settings: Settings
+) -> str:
     clone_settings = [
         "_TRIGGER_JOB_DONE_HOOK=1",
         f"_GROUP_ID={settings.investigation_gid}",
@@ -129,12 +143,13 @@ def clone_job(origin_job_id: int, job_id_to_clone: int, name_suffix: str, refspe
     ]
     clone_job_data = client_get_job(job_id_to_clone, settings)
 
-    unsupported_cluster_jobs = (
-        len(clone_job_data["job"].get("children", {}).get("Directly chained", []))
-        + len(clone_job_data["job"].get("parents", {}).get("Directly chained", []))
+    unsupported_cluster_jobs = len(clone_job_data["job"].get("children", {}).get("Directly chained", [])) + len(
+        clone_job_data["job"].get("parents", {}).get("Directly chained", [])
     )
     if unsupported_cluster_jobs != 0:
-        console.print(f"[bold red]Unable to clone job {job_id_to_clone}: it is part of a directly chained cluster (not supported)[/bold red]")
+        console.print(
+            f"[bold red]Unable to clone job {job_id_to_clone}: it is part of a directly chained cluster (not supported)[/bold red]"
+        )
         raise typer.Exit(2)
 
     base_name = clone_job_data["job"]["test"]
@@ -145,10 +160,12 @@ def clone_job(origin_job_id: int, job_id_to_clone: int, name_suffix: str, refspe
         casedir = clone_job_data["job"]["settings"].get("CASEDIR")
 
         if test_git_url and not re.match(r"^https?://[^ ]+$", test_git_url):
-            console.print(f"[yellow]Can not clone refspec of job {origin_job_id} with unknown/invalid git url TEST_GIT_URL='{test_git_url}'[/yellow]")
+            console.print(
+                f"[yellow]Can not clone refspec of job {origin_job_id} with unknown/invalid git url TEST_GIT_URL='{test_git_url}'[/yellow]"
+            )
             return ""
 
-        repo = casedir if casedir else "https://github.com/os-autoinst/os-autoinst-distri-opensuse.git"
+        repo = casedir or "https://github.com/os-autoinst/os-autoinst-distri-opensuse.git"
         if "#" in repo:
             repo = repo.split("#")[0]
         clone_settings.append(f"CASEDIR={repo}#{refspec}")
@@ -168,13 +185,24 @@ def clone_job(origin_job_id: int, job_id_to_clone: int, name_suffix: str, refspe
     clone_settings.append(f"OPENQA_INVESTIGATE_ORIGIN={settings.host_url}/tests/{origin_job_id}")
 
     out = run_openqa_cli(
-        ["openqa-clone-job", "--json-output", "--skip-chained-deps", "--max-depth", "0", "--parental-inheritance", "--within-instance", f"{settings.host_url}/tests/{origin_job_id}"] + clone_settings,
+        [
+            "openqa-clone-job",
+            "--json-output",
+            "--skip-chained-deps",
+            "--max-depth",
+            "0",
+            "--parental-inheritance",
+            "--within-instance",
+            f"{settings.host_url}/tests/{origin_job_id}",
+        ]
+        + clone_settings,
         dry_run=settings.dry_run,
     )
 
     if settings.dry_run:
         return json.dumps({str(origin_job_id): 42})
     return out
+
 
 def trigger_jobs(job_id: int, settings: Settings) -> str:
     out = ""
@@ -197,7 +225,9 @@ def trigger_jobs(job_id: int, settings: Settings) -> str:
 
     last_good = investigation["last_good"]["text"]
     if not re.match(r"^[0-9]+$", last_good):
-        console.print(f"[bold red].last_good.text not found: investigation for test {job_id} returned '{investigation}'[/bold red]")
+        console.print(
+            f"[bold red].last_good.text not found: investigation for test {job_id} returned '{investigation}'[/bold red]"
+        )
         raise typer.Exit(1)
 
     # 2. current job/build + last good test (+ last good needles) -> check for test (+needles) regression
@@ -211,8 +241,10 @@ def trigger_jobs(job_id: int, settings: Settings) -> str:
             out += clone_job(job_id, job_id, f"last_good_tests:{last_good_tests}", last_good_tests, settings)
 
     # 3. last good job/build + current test -> check for product regression
-    if investigation.get("BUILD") == last_good: # Assuming investigation['BUILD'] would contain the current build ID
-        console.print("Current job has same build as last good, product regression unlikely. Skipping product regression investigation job.")
+    if investigation.get("BUILD") == last_good:  # Assuming investigation['BUILD'] would contain the current build ID
+        console.print(
+            "Current job has same build as last good, product regression unlikely. Skipping product regression investigation job."
+        )
     else:
         vars_last_good_build = fetch_vars_json(int(last_good), settings)
         last_good_build = vars_last_good_build.get("BUILD")
@@ -221,13 +253,24 @@ def trigger_jobs(job_id: int, settings: Settings) -> str:
 
     # 4. last good job/build + last good test -> check for other problem sources, e.g. infrastructure
     if not last_good_tests:
-        console.print("No test regression expected. Not triggered 'good build+test' as it would be the same as 3., good build + current test")
+        console.print(
+            "No test regression expected. Not triggered 'good build+test' as it would be the same as 3., good build + current test"
+        )
     elif not investigation.get("BUILD") == last_good:
-        console.print("No product regression expected. Not triggered 'good build+test' as it would be the same as 2., current build + good test")
+        console.print(
+            "No product regression expected. Not triggered 'good build+test' as it would be the same as 2., current build + good test"
+        )
     else:
-        out += clone_job(job_id, int(last_good), f"last_good_tests_and_build:{last_good_tests}+{last_good_build}", last_good_tests, settings)
+        out += clone_job(
+            job_id,
+            int(last_good),
+            f"last_good_tests_and_build:{last_good_tests}+{last_good_build}",
+            last_good_tests,
+            settings,
+        )
 
     return out
+
 
 def query_dependency_data_or_postpone(job_id: int, job_data: dict, settings: Settings) -> Optional[dict]:
     dependency_data = get_dependencies_ajax(job_id, settings)
@@ -243,15 +286,20 @@ def query_dependency_data_or_postpone(job_id: int, job_data: dict, settings: Set
         if node["id"] in cluster_jobs and not is_finished(node["state"])
     ]
     if pending_cluster_jobs:
-        console.print(f"[yellow]Postponing to investigate job {job_id}: waiting until {len(pending_cluster_jobs)} pending parallel job(s) finished[/yellow]")
+        console.print(
+            f"[yellow]Postponing to investigate job {job_id}: waiting until {len(pending_cluster_jobs)} pending parallel job(s) finished[/yellow]"
+        )
         return None
     return dependency_data
+
 
 def sync_via_investigation_comment(job_id: int, first_cluster_job_id: int, settings: Settings) -> Optional[int]:
     if settings.dry_run:
         return 42
 
-    comment_id = client_post_job_comment(first_cluster_job_id, f"Starting investigation for job {job_id}", settings)["id"]
+    comment_id = client_post_job_comment(first_cluster_job_id, f"Starting investigation for job {job_id}", settings)[
+        "id"
+    ]
     comments = run_openqa_cli(["api", "--host", settings.host_url, f"jobs/{first_cluster_job_id}/comments"])
     first_comment_id = None
     min_comment_id = sys.maxsize
@@ -261,12 +309,17 @@ def sync_via_investigation_comment(job_id: int, first_cluster_job_id: int, setti
             first_comment_id = comment_data["id"]
 
     if comment_id != first_comment_id:
-        console.print(f"[yellow]Skipping investigation of job {job_id}: job cluster is already being investigated, see comment on job {first_cluster_job_id}[/yellow]")
+        console.print(
+            f"[yellow]Skipping investigation of job {job_id}: job cluster is already being investigated, see comment on job {first_cluster_job_id}[/yellow]"
+        )
         client_delete_job_comment(first_cluster_job_id, comment_id, settings)
         return None
     return comment_id
 
-def finalize_investigation_comment(job_id: int, first_cluster_job_id: int, comment_id: int, comment_text: str, settings: Settings) -> None:
+
+def finalize_investigation_comment(
+    job_id: int, first_cluster_job_id: int, comment_id: int, comment_text: str, settings: Settings
+) -> None:
     if not comment_text:
         client_delete_job_comment(first_cluster_job_id, comment_id, settings)
         return
@@ -295,9 +348,7 @@ def investigate(
     openqa_cli_retry_sleep_time_s: int = typer.Option(20, help="Sleep time for openqa-cli retries"),
     mojo_connect_timeout: int = typer.Option(30, help="Mojo connect timeout"),
 ) -> None:
-    """
-    Investigate openQA jobs.
-    """
+    """Investigate openQA jobs."""
     settings = Settings(
         host=host,
         scheme=scheme,
@@ -323,24 +374,28 @@ def investigate(
 
     clone_id = job_data["job"].get("clone_id")
     if not settings.force and clone_id is not None:
-        console.print(f"[yellow]Job {job_id} already has a clone, skipping investigation. Use the env variable 'force=true' to trigger investigation jobs[/yellow]")
+        console.print(
+            f"[yellow]Job {job_id} already has a clone, skipping investigation. Use the env variable 'force=true' to trigger investigation jobs[/yellow]"
+        )
         return
 
     dependency_data = query_dependency_data_or_postpone(job_id, job_data, settings)
     if dependency_data is None:
         raise typer.Exit(142)  # Indicate postponement
 
-    first_cluster_job_id = job_id # Simplified, original script has more complex logic
+    first_cluster_job_id = job_id  # Simplified, original script has more complex logic
     comment_id = sync_via_investigation_comment(job_id, first_cluster_job_id, settings)
     if comment_id is None:
-        return # Already being investigated
+        return  # Already being investigated
 
     comment_output = ""
     try:
         comment_output = trigger_jobs(job_id, settings)
     except Exception as e:
         console.print(f"[bold red]Triggering investigation jobs failed: {e}[/bold red]")
-        finalize_investigation_comment(job_id, first_cluster_job_id, comment_id, f"Triggering investigation jobs failed: {e}", settings)
+        finalize_investigation_comment(
+            job_id, first_cluster_job_id, comment_id, f"Triggering investigation jobs failed: {e}", settings
+        )
         raise typer.Exit(1)
 
     finalize_investigation_comment(job_id, first_cluster_job_id, comment_id, comment_output, settings)

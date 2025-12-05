@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
 """The script sets the due date on tickets in Redmine based on specified conditions."""
+
 import datetime
 import pathlib
 from typing import Optional
@@ -50,8 +51,7 @@ def callback(
     dry_run: bool = typer.Option(False, "--dry-run", help="Do not do any action on Redmine"),
     issues_file: Optional[str] = typer.Option(None, help="Read issues from a file instead of Redmine"),
 ) -> None:
-    """Set the due date on tickets in Redmine based on specified conditions.
-    """
+    """Set the due date on tickets in Redmine based on specified conditions."""
     ctx.meta["settings"] = Settings(
         redmine_api_key,
         host,
@@ -82,7 +82,9 @@ def main(ctx: typer.Context) -> None:
             console.print(f"[bold red]Error querying Redmine: {e}[/bold red]")
             raise typer.Exit(1)
 
-    due_date = (datetime.date.today() + datetime.timedelta(days=int(settings.duration.split(maxsplit=1)[0]))).strftime("%Y-%m-%d")
+    due_date = (datetime.date.today() + datetime.timedelta(days=int(settings.duration.split(maxsplit=1)[0]))).strftime(
+        "%Y-%m-%d"
+    )
 
     for issue in issues:
         if (
@@ -104,9 +106,7 @@ def main(ctx: typer.Context) -> None:
                     response = httpx.put(url, headers=headers, json=data)
                     response.raise_for_status()
                 except httpx.HTTPError as e:
-                    console.print(
-                        f"[bold red]Error updating ticket {issue['id']}: {e}[/bold red]"
-                    )
+                    console.print(f"[bold red]Error updating ticket {issue['id']}: {e}[/bold red]")
 
 
 if __name__ == "__main__":

@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-Common Python functions to be used when interacting with openQA instances, for example over openqa-cli.
-"""
+"""Common Python functions to be used when interacting with openQA instances, for example over openqa-cli."""
+
 import json
-import re
 import subprocess
 import sys
 import time
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import httpx
 from rich.console import Console
-from sh import ErrorReturnCode, CommandNotFound
+from sh import CommandNotFound
 
 console = Console()
 
@@ -57,6 +55,7 @@ def job_ids(job_post_response_content: str) -> List[str]:
     except json.JSONDecodeError:
         return []
 
+
 def runcli(args: List[str], verbose: bool = False) -> str:
     if verbose:
         log_debug(f"Running: {' '.join(args)}")
@@ -74,6 +73,7 @@ def runcli(args: List[str], verbose: bool = False) -> str:
         warn(f"Command not found: {args[0]}")
         raise
 
+
 def runjq(input_string: str, query: str, output_limit: int = 15) -> str:
     try:
         # Using Python's json module instead of external jq
@@ -81,10 +81,10 @@ def runjq(input_string: str, query: str, output_limit: int = 15) -> str:
         # This is a very basic replacement for jq, for complex queries a proper jq-like library or re-implementing the logic would be needed.
         # For simple cases like .ids[] or .job.result, direct dictionary access might suffice.
         # For now, let's assume direct dictionary access for common patterns.
-        if query == '.ids[]':
-            return '\n'.join([str(x) for x in data.get('ids', [])])
-        elif query.startswith('.job.'):
-            parts = query.split('.')
+        if query == ".ids[]":
+            return "\n".join([str(x) for x in data.get("ids", [])])
+        if query.startswith(".job."):
+            parts = query.split(".")
             value = data
             for part in parts[1:]:
                 if isinstance(value, dict):
@@ -93,17 +93,17 @@ def runjq(input_string: str, query: str, output_limit: int = 15) -> str:
                     value = None
                     break
             return str(value) if value is not None else "null"
-        else:
-            # Fallback for more complex jq queries or when direct access is not simple
-            # This is where a full jq-like library might be needed
-            log_warn(f"Complex jq query not fully supported yet: {query}. Returning full input.")
-            return input_string
+        # Fallback for more complex jq queries or when direct access is not simple
+        # This is where a full jq-like library might be needed
+        log_warn(f"Complex jq query not fully supported yet: {query}. Returning full input.")
+        return input_string
     except json.JSONDecodeError:
         warn(f"runjq: Invalid JSON input. Input: {input_string[:output_limit]}...")
         raise
     except Exception as e:
         warn(f"runjq: Error processing query '{query}': {e}. Input: {input_string[:output_limit]}...")
         raise
+
 
 def exp_retry(stop_exponent: int, exponent: int) -> bool:
     if exponent >= stop_exponent:
@@ -114,20 +114,20 @@ def exp_retry(stop_exponent: int, exponent: int) -> bool:
     time.sleep(wait_sec)
     return True
 
+
 def shorten_string(sstring: str, max_str_len: int = 120) -> str:
     if len(sstring) > max_str_len:
         half_len = max_str_len // 2
         return f"{sstring[:half_len]}...{sstring[-half_len:]}"
     return sstring
 
-def runcurl(
-    args: List[str], exp_retries: int = 12, verbose: bool = False
-) -> str:
+
+def runcurl(args: List[str], exp_retries: int = 12, verbose: bool = False) -> str:
     for retry_exponent in range(exp_retries + 1):
         if verbose:
             log_debug(f"curl: Fetching ({' '.join(args)})")
         try:
-            response = httpx.get(args[-1]) # Assuming URL is always the last argument for simplicity
+            response = httpx.get(args[-1])  # Assuming URL is always the last argument for simplicity
             response.raise_for_status()
             return response.text
         except httpx.RequestError as e:
@@ -140,6 +140,7 @@ def runcurl(
                 raise
     raise Exception("Max retries exceeded for curl operation")
 
+
 def openqa_api_get(path: str, host_url: str) -> dict:
     # This is a simplified version, as the shell script's openqa-api-get is more complex
     # and directly uses openqa-cli with --json flag.
@@ -151,16 +152,21 @@ def openqa_api_get(path: str, host_url: str) -> dict:
         warn(f"openqa-api-get: Error making API request ({path}): {e}")
         raise
 
-def comment_on_job(job_id: int, comment: str, force_result: Optional[str] = None, enable_force_result: bool = False) -> None:
+
+def comment_on_job(
+    job_id: int, comment: str, force_result: Optional[str] = None, enable_force_result: bool = False
+) -> None:
     if enable_force_result and force_result:
         comment = f"label:force_result:{force_result}:{comment}"
     # Placeholder, need to use openqa-cli api or httpx for actual comment posting
     log_info(f"Simulating comment on job {job_id}: {comment}")
 
+
 def search_log(job_id: int, search_term: str, out_file: str, grep_timeout: int = 5) -> bool:
     # Placeholder for actual log searching
     log_info(f"Simulating searching log {out_file} for '{search_term}'")
-    return True # Always found for simulation
+    return True  # Always found for simulation
+
 
 def list_packages(obs_project: str) -> List[str]:
     try:
@@ -172,6 +178,7 @@ def list_packages(obs_project: str) -> List[str]:
     except CommandNotFound:
         warn(f"Command not found: {OSC}. Is OBS client installed?")
         return []
+
 
 def delete_packages_from_obs_project(obs_project: str) -> None:
     log_info(f"Deleting packages from OBS project: {obs_project}")
@@ -186,6 +193,7 @@ def delete_packages_from_obs_project(obs_project: str) -> None:
         except subprocess.CalledProcessError as e:
             log_error(f"Error deleting package {package} from {obs_project}: {e.stderr}")
 
+
 def openqa_api_post(path: str, data: dict, host_url: str) -> dict:
     try:
         result = runcli([OPENQA_CLI, "api", "--host", host_url, "-X", "POST", path, "--json"], input=json.dumps(data))
@@ -193,6 +201,7 @@ def openqa_api_post(path: str, data: dict, host_url: str) -> dict:
     except Exception as e:
         warn(f"openqa-api-post: Error making API request ({path}): {e}")
         raise
+
 
 def openqa_api_put(path: str, data: dict, host_url: str) -> dict:
     try:

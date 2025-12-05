@@ -1,30 +1,24 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-Trigger tests on an openQA instance testing openQA itself.
-"""
+"""Trigger tests on an openQA instance testing openQA itself."""
+
 import datetime
-import json
-import os
-import re
 import sys
 import tempfile
 from typing import List, Optional
 
 import typer
-import yaml
+
 from os_autoinst_scripts._common import (
+    ErrorReturnCode,
     cleanup_obs_project,
     console,
     delete_packages_from_obs_project,
-    ErrorReturnCode,
     find_latest_published_tumbleweed_image,
     list_packages,
     log_error,
     log_info,
     log_warn,
-    openqa_cli,
-    osc,
     runcli,
     runcurl,
 )
@@ -32,39 +26,16 @@ from os_autoinst_scripts._common import (
 app = typer.Typer()
 
 
-import datetime
-import json
-import os
-import re
-import sys
-import tempfile
-from typing import List, Optional
+import pathlib
 
 import typer
-import yaml
-from os_autoinst_scripts._common import (
-    cleanup_obs_project,
-    console,
-    delete_packages_from_obs_project,
-    ErrorReturnCode,
-    find_latest_published_tumbleweed_image,
-    list_packages,
-    log_error,
-    log_info,
-    log_warn,
-    openqa_cli,
-    osc,
-    runcli,
-    runcurl,
-)
 
 app = typer.Typer()
 
 
 def download_scenario() -> str:
     scenario_url = (
-        f"https://raw.githubusercontent.com/os-autoinst/os-autoinst-distri-openQA/master/"
-        f"{SCENARIO_DEFINITIONS}"
+        f"https://raw.githubusercontent.com/os-autoinst/os-autoinst-distri-openQA/master/{SCENARIO_DEFINITIONS}"
     )
     try:
         response_text = runcurl([scenario_url])
@@ -87,18 +58,30 @@ def create_devel_openqa_snapshot(full_run: bool, dry_run: bool) -> int:
         log_warn(
             f"NOTE: Only triggering tests from {SRC_PROJECT} (not overriding {STAGING_PROJECT} and doing a submission) because {STAGING_PROJECT} still contains packages. You might need to do a manual cleanup if no other pipeline is running. Packages: {staged_packages}"
         )
-        with open("job_post_skip_submission", "w") as f:
+        with pathlib.Path("job_post_skip_submission").open("w") as f:
             f.write("true")
         return 0
 
-    if os.path.exists("job_post_skip_submission"):
-        os.remove("job_post_skip_submission")
+    if pathlib.Path("job_post_skip_submission").exists():
+        pathlib.Path("job_post_skip_submission").unlink()
 
     for package in auto_submit_packages:
         if not dry_run:
             log_info(f"Simulating checking state of {package} in OBS")
         try:
-            osc_command = ["osc", "release", "--no-delay", "--target-project", STAGING_PROJECT, "-r", "openSUSE_Tumbleweed", "-a", ARCH, SRC_PROJECT, package]
+            osc_command = [
+                "osc",
+                "release",
+                "--no-delay",
+                "--target-project",
+                STAGING_PROJECT,
+                "-r",
+                "openSUSE_Tumbleweed",
+                "-a",
+                ARCH,
+                SRC_PROJECT,
+                package,
+            ]
             if dry_run:
                 log_info(f"Would run: {' '.join(osc_command)}")
             else:
@@ -127,9 +110,7 @@ def main_app(
     group_id: str = typer.Option(GROUP_ID, help="openQA group ID"),
     build_tag: str = typer.Option("", help="Build tag"),
 ) -> None:
-    """
-    Triggers tests on an openQA instance testing openQA itself.
-    """
+    """Triggers tests on an openQA instance testing openQA itself."""
     openqa_cli_cmd = OPENQA_CLI_COMMAND
     if dry_run:
         openqa_cli_cmd = f"echo {OPENQA_CLI_COMMAND}"
@@ -150,7 +131,7 @@ def main_app(
                 # Using httpx for download as wget is an external command
                 response = httpx.get(asset_url, follow_redirects=True)
                 response.raise_for_status()
-                with open(target_path, "wb") as f:
+                with pathlib.Path(target_path).open("wb") as f:
                     f.write(response.content)
             except httpx.HTTPError as e:
                 log_error(f"Error downloading QCOW image: {e}")
@@ -175,34 +156,35 @@ def main_app(
     if target_host == "openqa.opensuse.org":
         args.append("OPENQA_HOST=http://openqa.opensuse.org")
 
-    schedule_cmd = [
-        "schedule",
-        "--monitor",
-        "--follow",
-        "--host",
-        f"{target_host_proto}://{target_host}",
-        "--param-file",
-        f"SCENARIO_DEFINITIONS_YAML={scenario_file_path}",
-        f"VERSION={version}",
-        "DISTRI=openqa",
-        f"FLAVOR={flavor}",
-        f"ARCH={arch}",
-        f"HDD_1={qcow_image}",
-        f"BUILD={build_name if build_name else datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}",
-        f"_GROUP_ID=0", # The original script used _GROUP_ID=0, but the variable is group_id. Assuming group_id is meant to be used here.
-        f"OPENQA_OBS_PROJECT={STAGING_PROJECT}",
-    ] + args
+    schedule_cmd = (
+        [
+            "schedule",
+            "--monitor",
+            "--follow",
+            "--host",
+            f"{target_host_proto}://{target_host}",
+            "--param-file",
+            f"SCENARIO_DEFINITIONS_YAML={scenario_file_path}",
+            f"VERSION={version}",
+            "DISTRI=openqa",
+            f"FLAVOR={flavor}",
+            f"ARCH={arch}",
+            f"HDD_1={qcow_image}",
+            f"BUILD={build_name or datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}",
+            "_GROUP_ID=0",  # The original script used _GROUP_ID=0, but the variable is group_id. Assuming group_id is meant to be used here.
+            f"OPENQA_OBS_PROJECT={STAGING_PROJECT}",
+        ]
+        + args
+    )
 
     if dry_run:
         console.print(f"Would run: {openqa_cli_cmd} {' '.join(schedule_cmd)}")
     else:
         try:
-            result = runcli(
-                [openqa_cli_cmd] + schedule_cmd, capture_output=True, text=True, check=True
-            )
-            with open("full_job_post_response", "w") as f:
+            result = runcli([openqa_cli_cmd] + schedule_cmd, capture_output=True, text=True, check=True)
+            with pathlib.Path("full_job_post_response").open("w") as f:
                 f.write(result.stdout)
-            with open("job_post_response", "w") as f:
+            with pathlib.Path("job_post_response").open("w") as f:
                 f.write(result.stdout.splitlines()[0])
         except ErrorReturnCode as e:
             log_error(f"Error scheduling job: {e.stderr}")

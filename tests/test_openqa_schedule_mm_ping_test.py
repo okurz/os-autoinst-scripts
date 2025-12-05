@@ -1,9 +1,7 @@
 # Copyright SUSE LLC
 import json
-import tempfile
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
-import yaml
 from pytest_mock import MockerFixture
 from typer.testing import CliRunner
 
@@ -16,16 +14,14 @@ def test_schedule_mm_ping_test(mocker: MockerFixture) -> None:
     mock_openqa_cli = mocker.patch("os_autoinst_scripts.openqa_schedule_mm_ping_test.openqa_cli")
     mock_openqa_cli.side_effect = [
         MagicMock(
-            stdout=json.dumps(
-                {
-                    "jobs": [
-                        {
-                            "result": "passed",
-                            "settings": {"BUILD": "20240101", "HDD_1": "some_hdd_image"},
-                        }
-                    ]
-                }
-            ).encode()
+            stdout=json.dumps({
+                "jobs": [
+                    {
+                        "result": "passed",
+                        "settings": {"BUILD": "20240101", "HDD_1": "some_hdd_image"},
+                    }
+                ]
+            }).encode()
         ),
         MagicMock(),
     ]

@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script queries openQA for jobs based on various filters and then restarts them.
-"""
-import os
-import sys
+"""The script queries openQA for jobs based on various filters and then restarts them."""
+
 from typing import List, Optional
 
 import typer
 from rich.console import Console
-from sh import ssh, openqa_cli
+from sh import openqa_cli, ssh
 
 app = typer.Typer()
 console = Console()
@@ -30,11 +27,10 @@ def main(
     cli_protocol: Optional[str] = typer.Option(None, help="Protocol for openqa-cli"),
     cli_port: Optional[str] = typer.Option(None, help="Port for openqa-cli"),
 ) -> None:
-    """
-    Queries openQA for jobs based on various filters and then restarts them.
-    """
+    """Queries openQA for jobs based on various filters and then restarts them."""
     if not failed_since:
         import datetime
+
         failed_since = datetime.date.today().isoformat()
 
     instance_string = f" and instance='{instance}'" if instance else ""

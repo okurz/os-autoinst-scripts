@@ -7,19 +7,19 @@ import pytest
 from pytest_mock import MockerFixture
 
 from os_autoinst_scripts._common import (
-    job_ids,
-    runcli,
-    runjq,
-    exp_retry,
-    shorten_string,
-    runcurl,
-    openqa_api_get,
     comment_on_job,
-    search_log,
-    list_packages,
     delete_packages_from_obs_project,
+    exp_retry,
+    job_ids,
+    list_packages,
+    openqa_api_get,
     openqa_api_post,
     openqa_api_put,
+    runcli,
+    runcurl,
+    runjq,
+    search_log,
+    shorten_string,
 )
 
 
@@ -39,9 +39,7 @@ def test_runcli_success(mocker: MockerFixture) -> None:
 
     result = runcli(["echo", "hello"])
     assert result == "success"
-    mock_subprocess_run.assert_called_once_with(
-        ["echo", "hello"], capture_output=True, text=True, check=True
-    )
+    mock_subprocess_run.assert_called_once_with(["echo", "hello"], capture_output=True, text=True, check=True)
 
 
 def test_runcli_error(mocker: MockerFixture) -> None:
@@ -79,7 +77,7 @@ def test_exp_retry() -> None:
 
 def test_shorten_string() -> None:
     assert shorten_string("a" * 100) == "a" * 100
-    assert shorten_string("a" * 150) == f"{ 'a'*75 }...{'a'*75}"
+    assert shorten_string("a" * 150) == f"{'a' * 75}...{'a' * 75}"
 
 
 def test_runcurl_success(mocker: MockerFixture) -> None:
@@ -110,9 +108,14 @@ def test_openqa_api_get(mocker: MockerFixture) -> None:
 
     result = openqa_api_get("jobs/123", "https://openqa.example.com")
     assert result == {"job": {"id": 123}}
-    mock_runcli.assert_called_once_with(
-        ["openqa-cli", "api", "--host", "https://openqa.example.com", "--json", "jobs/123"]
-    )
+    mock_runcli.assert_called_once_with([
+        "openqa-cli",
+        "api",
+        "--host",
+        "https://openqa.example.com",
+        "--json",
+        "jobs/123",
+    ])
 
 
 def test_comment_on_job(mocker: MockerFixture) -> None:
@@ -141,32 +144,30 @@ def test_delete_packages_from_obs_project(mocker: MockerFixture) -> None:
 
     mock_list_packages.return_value = ["package1", "package2"]
     delete_packages_from_obs_project("my-project")
-    mock_subprocess_run.assert_has_calls(
-        [
-            call(
-                [
-                    "osc",
-                    "rdelete",
-                    "-m",
-                    "Cleaning up package1 from my-project",
-                    "my-project",
-                    "package1",
-                ],
-                check=True,
-            ),
-            call(
-                [
-                    "osc",
-                    "rdelete",
-                    "-m",
-                    "Cleaning up package2 from my-project",
-                    "my-project",
-                    "package2",
-                ],
-                check=True,
-            ),
-        ]
-    )
+    mock_subprocess_run.assert_has_calls([
+        call(
+            [
+                "osc",
+                "rdelete",
+                "-m",
+                "Cleaning up package1 from my-project",
+                "my-project",
+                "package1",
+            ],
+            check=True,
+        ),
+        call(
+            [
+                "osc",
+                "rdelete",
+                "-m",
+                "Cleaning up package2 from my-project",
+                "my-project",
+                "package2",
+            ],
+            check=True,
+        ),
+    ])
 
 
 def test_openqa_api_post(mocker: MockerFixture) -> None:

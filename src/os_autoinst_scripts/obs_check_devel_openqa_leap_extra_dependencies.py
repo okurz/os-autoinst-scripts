@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""The script checks for a "Reason for linking:" comment in OBS packages.
-"""
+"""The script checks for a "Reason for linking:" comment in OBS packages."""
 
 import typer
+
 from os_autoinst_scripts._common import console, osc
 
 app = typer.Typer()
@@ -11,8 +11,7 @@ app = typer.Typer()
 
 @app.command()
 def main() -> None:
-    """Check for a "Reason for linking:" comment in OBS packages.
-    """
+    """Check for a "Reason for linking:" comment in OBS packages."""
     osc_cmd = osc.bake("--apiurl", "https://api.opensuse.org")
     problem = False
     projects = osc_cmd.search("--project", "-s", "devel:openQA:Leap:").stdout.decode().splitlines()

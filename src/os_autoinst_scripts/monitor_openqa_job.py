@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-Monitor an openQA job by polling the status of a job over the API.
-"""
+"""Monitor an openQA job by polling the status of a job over the API."""
+
 import json
 import os
+import pathlib
 import sys
-import time
 from typing import List, Optional
 
 import typer
+
 from os_autoinst_scripts._common import (
+    ErrorReturnCode,
     console,
+    delete_packages_from_obs_project,
+    job_ids,
+    log_error,
     log_info,
     log_warn,
-    log_error,
-    ErrorReturnCode,
     openqa_cli,
     osc,
-    job_ids,
-    delete_packages_from_obs_project,
 )
 
 app = typer.Typer()
@@ -37,16 +37,14 @@ def main(
     comment_on_obs: bool = typer.Option(False, "--comment-on-obs", help="Comment on OBS for failed jobs"),
     openqa_cli_retries: int = typer.Option(7, help="openQA CLI retries"),
 ) -> None:
-    """
-    Monitor an openQA job by polling the status of a job over the API.
-    """
+    """Monitor an openQA job by polling the status of a job over the API."""
     os.environ["OPENQA_CLI_RETRIES"] = str(openqa_cli_retries)
 
     failed_versions: dict[str, int] = {}
     failed_jobs: List[str] = []
 
     _job_ids: List[str]
-    with open(job_post_response_file, "r") as f:
+    with pathlib.Path(job_post_response_file).open() as f:
         _job_ids = job_ids(f.read())
 
     for job_id in _job_ids:
@@ -107,7 +105,9 @@ def main(
         # For a full implementation, consider using ElementTree or lxml for XML parsing.
         log_warn("Simulating deletion of old OBS comments")
 
-        comment_text = f"openQA-in-openQA test(s) failed (job IDs: {', '.join(failed_jobs)}), see {host}/tests/overview?"
+        comment_text = (
+            f"openQA-in-openQA test(s) failed (job IDs: {', '.join(failed_jobs)}), see {host}/tests/overview?"
+        )
         for version in failed_versions:
             comment_text += f"version={version}&"
         comment_text += f"groupid={openqa_groupid}"

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""The script queries the openQA database for statistics about incomplete jobs.
-"""
+"""The script queries the openQA database for statistics about incomplete jobs."""
 
 import typer
-from os_autoinst_scripts._common import console, ErrorReturnCode, ssh
+
+from os_autoinst_scripts._common import console, ssh
 
 app = typer.Typer()
 
@@ -17,12 +17,9 @@ def main(
     width: int = typer.Option(80, help="Width of the comment text"),
     threshold: int = typer.Option(0, help="Threshold for the number of jobs"),
     show_job_ids: bool = typer.Option(False, "--show-job-ids", help="Show job IDs"),
-    show_worker_hosts: bool = typer.Option(
-        False, "--show-worker-hosts", help="Show worker hosts"
-    ),
+    show_worker_hosts: bool = typer.Option(False, "--show-worker-hosts", help="Show worker hosts"),
 ) -> None:
-    """Query the openQA database for statistics about incomplete jobs.
-    """
+    """Query the openQA database for statistics about incomplete jobs."""
     if not ssh_host:
         ssh_host = host
 

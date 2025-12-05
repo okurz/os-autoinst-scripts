@@ -26,9 +26,7 @@ def test_testapi_usage(mocker: MockerFixture) -> None:
 
     assert result.exit_code == 0
     assert "some/repo - assert_screen : 1 match" in result.stdout
-    mock_rg.assert_called_once_with(
-        "--engine", "pcre2", "--stats", "(?<!_)assert_screen", "some/repo"
-    )
+    mock_rg.assert_called_once_with("--engine", "pcre2", "--stats", "(?<!_)assert_screen", "some/repo")
     mock_grep.assert_any_call(r"^sub \w+\s*[({:]", "testapi.pm")
     mock_cut.assert_called_once_with("-f2", "-d", " ")
     mock_sort.assert_called_once()
