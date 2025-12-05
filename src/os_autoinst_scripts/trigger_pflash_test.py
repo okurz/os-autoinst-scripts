@@ -3,14 +3,12 @@
 """Trigger test to generate pflash vars image
 """
 import os
-from typing import List
+import sys
 
 import typer
-from rich.console import Console
-from sh import openqa_cli
+from os_autoinst_scripts._common import console, openqa_cli, ErrorReturnCode
 
 app = typer.Typer()
-console = Console()
 
 
 def find_latest_published_tumbleweed_image(
@@ -58,31 +56,35 @@ def main(
             f"ISO={image} {' '.join(cli_args)}"
         )
     else:
-        openqa_cli(
-            "api",
-            "--host",
-            f"{target_host_proto}://{target_host}",
-            "-X",
-            "POST",
-            "jobs",
-            "--apikey",
-            openqa_api_key,
-            "--apisecret",
-            openqa_api_secret,
-            f"TEST=ovmf-resolution@{arch}",
-            "QEMUVGA=qxl",
-            "UEFI=1",
-            "UEFI_PFLASH_CODE=/usr/share/qemu/ovmf-x86_64-ms-code.bin",
-            "UEFI_PFLASH_VARS=/usr/share/qemu/ovmf-x86_64-ms-vars.bin",
-            "PUBLISH_PFLASH_VARS=ovmf-x86_64-ms-vars-800x600.qcow2",
-            "DISTRI=openSUSE",
-            "VERSION=Tumbleweed",
-            "FLAVOR=NET",
-            f"ARCH={arch}",
-            "SCHEDULE=tests/boot/tianocore_set_resolution",
-            f"ISO={image}",
-            *cli_args,
-        )
+        try:
+            openqa_cli(
+                "api",
+                "--host",
+                f"{target_host_proto}://{target_host}",
+                "-X",
+                "POST",
+                "jobs",
+                "--apikey",
+                openqa_api_key,
+                "--apisecret",
+                openqa_api_secret,
+                f"TEST=ovmf-resolution@{arch}",
+                "QEMUVGA=qxl",
+                "UEFI=1",
+                "UEFI_PFLASH_CODE=/usr/share/qemu/ovmf-x86_64-ms-code.bin",
+                "UEFI_PFLASH_VARS=/usr/share/qemu/ovmf-x86_64-ms-vars.bin",
+                "PUBLISH_PFLASH_VARS=ovmf-x86_64-ms-vars-800x600.qcow2",
+                "DISTRI=openSUSE",
+                "VERSION=Tumbleweed",
+                "FLAVOR=NET",
+                f"ARCH={arch}",
+                "SCHEDULE=tests/boot/tianocore_set_resolution",
+                f"ISO={image}",
+                *cli_args,
+            )
+        except ErrorReturnCode as e:
+            console.print(f"[bold red]Error triggering job: {e.stderr}[/bold red]")
+            raise typer.Exit(1)
 
 
 if __name__ == "__main__":
