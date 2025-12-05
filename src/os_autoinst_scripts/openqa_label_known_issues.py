@@ -10,10 +10,19 @@ from typing import List, Optional
 
 import httpx
 import typer
-from rich.console import Console
+from os_autoinst_scripts._common import (
+    console,
+    log_error,
+    log_info,
+    log_warn,
+    openqa_api_get,
+    openqa_api_post,
+    openqa_api_put,
+    openqa_api_delete,
+    runcurl,
+)
 
 app = typer.Typer()
-console = Console()
 
 
 class Settings:
@@ -55,11 +64,13 @@ class Settings:
 
 def get_issues(settings: Settings) -> List[dict]:
     try:
-        response = httpx.get(settings.issue_query)
-        response.raise_for_status()
-        return response.json()["issues"]
-    except httpx.HTTPError as e:
-        console.print(f"[bold red]Error querying issue tracker: {e}[/bold red]")
+        response = runcurl([settings.issue_query])
+        return json.loads(response)["issues"]
+    except httpx.HTTPStatusError as e:
+        log_error(f"Error querying issue tracker: {e}")
+        return []
+    except json.JSONDecodeError as e:
+        log_error(f"Error decoding JSON from issue tracker: {e}")
         return []
 
 
@@ -92,23 +103,19 @@ def handle_unreviewed(
 def investigate_issue(testurl: str, settings: Settings, issues: List[dict]) -> None:
     job_id = int(testurl.split("/")[-1])
     try:
-        response = httpx.get(f"{settings.host_url}/api/v1/jobs/{job_id}")
-        response.raise_for_status()
-        job_data = response.json()["job"]
-    except httpx.HTTPError as e:
-        console.print(f"[bold red]Error querying openQA API: {e}[/bold red]")
+        job_data = openqa_api_get(f"jobs/{job_id}", settings.host_url)
+    except httpx.HTTPStatusError as e:
+        log_error(f"Error querying openQA API: {e}")
         return
 
-    if job_data["state"] != "done" or job_data["result"] == "passed":
+    if job_data["job"]["state"] != "done" or job_data["job"]["result"] == "passed":
         return
 
-    reason = job_data.get("reason")
+    reason = job_data["job"].get("reason")
     log_url = f"{testurl}/file/autoinst-log.txt"
     try:
-        response = httpx.get(log_url)
-        response.raise_for_status()
-        log = response.text
-    except httpx.HTTPError:
+        log = runcurl([log_url])
+    except httpx.HTTPStatusError:
         log = ""
 
     full_log = f"{reason}\n{log}"
@@ -135,11 +142,11 @@ def investigate_issue(testurl: str, settings: Settings, issues: List[dict]) -> N
         testurl,
         full_log,
         reason,
-        job_data["group_id"],
+        job_data["job"]["group_id"],
         settings.email_unreviewed,
         settings.from_email,
         settings.notification_address,
-        job_data,
+        job_data["job"],
         settings.dry_run,
     )
 
