@@ -4,59 +4,61 @@
 Trigger tests on an openQA instance testing openQA itself.
 """
 import datetime
+import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 from typing import List, Optional
 
-import httpx
 import typer
 import yaml
-from rich.console import Console
-from sh import ErrorReturnCode, osc, openqa_cli
+from os_autoinst_scripts._common import (
+    cleanup_obs_project,
+    console,
+    delete_packages_from_obs_project,
+    ErrorReturnCode,
+    find_latest_published_tumbleweed_image,
+    list_packages,
+    log_error,
+    log_info,
+    log_warn,
+    openqa_cli,
+    osc,
+    runcli,
+    runcurl,
+)
 
 app = typer.Typer()
-console = Console()
-
-# Configuration variables with defaults.
-TARGET_HOST = "openqa.opensuse.org"
-TARGET_HOST_PROTO = "https"
-TW_OPENQA_HOST = "https://openqa.opensuse.org"
-TW_GROUP_ID = "1"
-OPENQA_CLI_COMMAND = "openqa-cli"
-ARCH = "x86_64"
-MACHINE = "uefi"
-FLAVOR = "dev"
-GROUP_ID = "openQA"
-SRC_PROJECT = "devel:openQA"
-STAGING_PROJECT = f"{SRC_PROJECT}:testing"
-DST_PROJECT = f"{SRC_PROJECT}:tested"
-SCENARIO_DEFINITIONS = "scenario-definitions.yaml"
-OSC_POLL_INTERVAL = 2
-OSC_BUILD_START_POLL_TRIES = 30
 
 
-# Placeholder for _common functions
-def find_latest_published_tumbleweed_image(
-    group_id: str, arch: str, machine: str, image_type: str
-) -> str:
-    # Simulating finding an image
-    return "openSUSE-Tumbleweed-DVD-x86_64-Snapshot20240101-Media.qcow2"
+import datetime
+import json
+import os
+import re
+import sys
+import tempfile
+from typing import List, Optional
 
+import typer
+import yaml
+from os_autoinst_scripts._common import (
+    cleanup_obs_project,
+    console,
+    delete_packages_from_obs_project,
+    ErrorReturnCode,
+    find_latest_published_tumbleweed_image,
+    list_packages,
+    log_error,
+    log_info,
+    log_warn,
+    openqa_cli,
+    osc,
+    runcli,
+    runcurl,
+)
 
-def cleanup_obs_project(project: str, confirm: str) -> None:
-    console.print(f"[yellow]Simulating cleanup of OBS project: {project}[/yellow]")
-
-
-def list_packages(project: str) -> List[str]:
-    # Simulating osc ls
-    return []
-
-
-def delete_packages_from_obs_project(project: str) -> None:
-    console.print(f"[yellow]Simulating deletion of packages from OBS project: {project}[/yellow]")
+app = typer.Typer()
 
 
 def download_scenario() -> str:
@@ -65,18 +67,16 @@ def download_scenario() -> str:
         f"{SCENARIO_DEFINITIONS}"
     )
     try:
-        response = httpx.get(scenario_url)
-        response.raise_for_status()
+        response_text = runcurl([scenario_url])
         with tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8") as f:
-            f.write(response.text)
+            f.write(response_text)
             return f.name
-    except httpx.HTTPError as e:
-        console.print(f"[bold red]Error downloading scenario definitions: {e}[/bold red]")
+    except Exception as e:
+        log_error(f"Error downloading scenario definitions: {e}")
         raise typer.Exit(1)
 
 
 def create_devel_openqa_snapshot(full_run: bool, dry_run: bool) -> int:
-    # Simplified logic, assuming success for now
     if full_run:
         return 0
 
@@ -84,38 +84,32 @@ def create_devel_openqa_snapshot(full_run: bool, dry_run: bool) -> int:
     staged_packages = list_packages(STAGING_PROJECT)
 
     if staged_packages:
-        console.print(
-            f"[yellow]NOTE: Only triggering tests from {SRC_PROJECT} (not overriding {STAGING_PROJECT} and doing a submission) because {STAGING_PROJECT} still contains packages. You might need to do a manual cleanup if no other pipeline is running. Packages: {staged_packages}[/yellow]"
+        log_warn(
+            f"NOTE: Only triggering tests from {SRC_PROJECT} (not overriding {STAGING_PROJECT} and doing a submission) because {STAGING_PROJECT} still contains packages. You might need to do a manual cleanup if no other pipeline is running. Packages: {staged_packages}"
         )
         with open("job_post_skip_submission", "w") as f:
             f.write("true")
-        # In the original script, this would set staging_project to src_project
-        # For Python, we just exit or return indicating this path
-        return 0  # Indicate success, but with a warning
+        return 0
 
     if os.path.exists("job_post_skip_submission"):
         os.remove("job_post_skip_submission")
 
     for package in auto_submit_packages:
-        # Simulating osc results check
         if not dry_run:
-            console.print(f"Simulating checking state of {package} in OBS")
-        # if state is not 'succeeded' or 'disabled', then there's a problem
-        # For now, assuming everything is ready
+            log_info(f"Simulating checking state of {package} in OBS")
         try:
             osc_command = ["osc", "release", "--no-delay", "--target-project", STAGING_PROJECT, "-r", "openSUSE_Tumbleweed", "-a", ARCH, SRC_PROJECT, package]
             if dry_run:
-                console.print(f"Would run: {' '.join(osc_command)}")
+                log_info(f"Would run: {' '.join(osc_command)}")
             else:
-                subprocess.run(osc_command, check=True)
+                runcli(osc_command, check=True)
         except ErrorReturnCode as e:
-            console.print(f"[bold red]Error creating snapshot for {package}: {e}[/bold red]")
+            log_error(f"Error creating snapshot for {package}: {e}")
             delete_packages_from_obs_project(STAGING_PROJECT)
             return 1
 
     if not dry_run:
-        # Simulating osc prjresults --watch
-        console.print(f"[yellow]Simulating waiting for packages to be published under {STAGING_PROJECT}[/yellow]")
+        log_info(f"Simulating waiting for packages to be published under {STAGING_PROJECT}")
     return 0
 
 
@@ -150,7 +144,7 @@ def main_app(
     if f"{target_host_proto}://{target_host}" != tw_openqa_host:
         asset_url = f"{tw_openqa_host}/assets/hdd/{qcow_image}"
         target_path = f"/var/lib/openqa/factory/hdd/{qcow_image}"
-        console.print(f"Downloading {asset_url} to {target_path}")
+        log_info(f"Downloading {asset_url} to {target_path}")
         if not dry_run:
             try:
                 # Using httpx for download as wget is an external command
@@ -159,7 +153,7 @@ def main_app(
                 with open(target_path, "wb") as f:
                     f.write(response.content)
             except httpx.HTTPError as e:
-                console.print(f"[bold red]Error downloading QCOW image: {e}[/bold red]")
+                log_error(f"Error downloading QCOW image: {e}")
                 sys.exit(1)
     if build_tag:
         build_name = build_tag.replace("jenkins-trigger-openQA_in_openQA-", ":").replace("-", ".")
@@ -168,7 +162,7 @@ def main_app(
     if not full_run:
         rc = create_devel_openqa_snapshot(full_run, dry_run)
         if rc != 0:
-            console.print("[bold red]Snapshot creation failed, cleaning up staging project.[/bold red]")
+            log_error("Snapshot creation failed, cleaning up staging project.")
             cleanup_obs_project(STAGING_PROJECT, "I am sure")
             raise typer.Exit(rc)
     else:
@@ -203,7 +197,7 @@ def main_app(
         console.print(f"Would run: {openqa_cli_cmd} {' '.join(schedule_cmd)}")
     else:
         try:
-            result = subprocess.run(
+            result = runcli(
                 [openqa_cli_cmd] + schedule_cmd, capture_output=True, text=True, check=True
             )
             with open("full_job_post_response", "w") as f:
@@ -211,7 +205,7 @@ def main_app(
             with open("job_post_response", "w") as f:
                 f.write(result.stdout.splitlines()[0])
         except ErrorReturnCode as e:
-            console.print(f"[bold red]Error scheduling job: {e.stderr}[/bold red]")
+            log_error(f"Error scheduling job: {e.stderr}")
             raise typer.Exit(1)
 
 
