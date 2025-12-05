@@ -5,11 +5,9 @@
 from typing import List
 
 import typer
-from rich.console import Console
-from sh import ssh
+from os_autoinst_scripts._common import ErrorReturnCode, console, ssh
 
 app = typer.Typer()
-console = Console()
 
 
 @app.command()
