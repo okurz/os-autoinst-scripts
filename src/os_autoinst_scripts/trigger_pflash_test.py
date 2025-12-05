@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""Trigger test to generate pflash vars image"""
+"""Trigger test to generate pflash vars image."""
 
 import os
 import sys

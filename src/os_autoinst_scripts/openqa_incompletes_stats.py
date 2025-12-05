@@ -23,7 +23,7 @@ def main(
     if not ssh_host:
         ssh_host = host
 
-    failed_since = f"(timezone('UTC', now()) - interval '{interval}')"
+    failed_since = "(timezone('UTC', now()) - interval '" + interval + "')"
     additional_columns = ""
     if show_job_ids:
         additional_columns += ", array_agg(jobs.id) as job_ids"

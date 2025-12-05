@@ -1,6 +1,5 @@
 # Copyright SUSE LLC
 import json
-from unittest.mock import MagicMock
 
 from pytest_mock import MockerFixture
 from typer.testing import CliRunner
@@ -20,9 +19,7 @@ def test_steps_no_failures(mocker: MockerFixture) -> None:
 
 
 def test_steps_with_failures(mocker: MockerFixture) -> None:
-    step_context = json.dumps(
-        {"job1": {"outcome": "success"}, "job2": {"outcome": "failure"}}
-    )
+    step_context = json.dumps({"job1": {"outcome": "success"}, "job2": {"outcome": "failure"}})
     result = runner.invoke(app, ["my-job", "owner/repo", "123", "--step-context", step_context])
 
     assert result.exit_code == 1

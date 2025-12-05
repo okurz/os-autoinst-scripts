@@ -11,23 +11,57 @@ from typing import List, Optional
 import httpx
 from rich.console import Console
 from sh import (
-    basename as sh_basename,
     CommandNotFound,
+)
+from sh import (
+    basename as sh_basename,
+)
+from sh import (
     cut as sh_cut,
-    ErrorReturnCode,
+)
+from sh import (
     git as sh_git,
+)
+from sh import (
     git_obs as sh_git_obs,
+)
+from sh import (
     grep as sh_grep,
+)
+from sh import (
     head as sh_head,
+)
+from sh import (
     nc as sh_nc,
+)
+from sh import (
     openqa_cli as sh_openqa_cli,
+)
+from sh import (
     osc as sh_osc,
+)
+from sh import (
     ping as sh_ping,
+)
+from sh import (
+    rg as sh_rg,  # Import rg
+)
+from sh import (
     rpmspec as sh_rpmspec,
+)
+from sh import (
     sed as sh_sed,
+)
+from sh import (
     sort as sh_sort,
+)
+from sh import (
     ssh as sh_ssh,
+)
+from sh import (
     tr as sh_tr,
+)
+from sh import (
     zypper as sh_zypper,
 )
 
@@ -44,12 +78,19 @@ nc = sh_nc
 openqa_cli = sh_openqa_cli
 osc = sh_osc
 ping = sh_ping
+rg = sh_rg  # Expose rg
 rpmspec = sh_rpmspec
 sed = sh_sed
 sort = sh_sort
 ssh = sh_ssh
 tr = sh_tr
 zypper = sh_zypper
+
+# Expose other functions
+from ._common_functions import (  # Assuming these are in a separate file or need to be defined here
+    delete_packages_from_obs_project,
+    list_packages,
+)
 
 OSC = "osc"  # Assuming osc is installed and in PATH
 OPENQA_CLI = "openqa-cli"  # Assuming openqa-cli is installed and in PATH

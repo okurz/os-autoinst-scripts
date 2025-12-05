@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script processes GitHub Actions step contexts to generate an HTML summary of failed steps.
-"""
+"""The script processes GitHub Actions step contexts to generate an HTML summary of failed steps."""
+
 import json
-import sys
 import xml.sax.saxutils
 from typing import Optional
 
@@ -22,9 +20,7 @@ def main(
     run_id: str = typer.Argument(..., help="Run ID"),
     step_context: Optional[str] = typer.Option(None, help="JSON string of step context"),
 ) -> None:
-    """
-    Processes GitHub Actions step contexts to generate an HTML summary of failed steps.
-    """
+    """Processes GitHub Actions step contexts to generate an HTML summary of failed steps."""
     if not step_context:
         typer.echo("::set-output name=result::")
         raise typer.Exit(0)
@@ -51,15 +47,13 @@ def main(
                     f"<a href='{escaped_repo_url}'>{escaped_repo_arg}</a></b></p>"
                     f"<table><tr><th>Job</th><th>Step</th><th>State</th></tr>"
                 )
-            
+
             escaped_pipeline = xml.sax.saxutils.escape(k)
             escaped_outcome = xml.sax.saxutils.escape(outcome)
             escaped_run_url = xml.sax.saxutils.escape(run_url)
             escaped_job_name = xml.sax.saxutils.escape(job_name)
 
-            results += (
-                f"<tr><td><a href='{escaped_run_url}'>{escaped_job_name}</td><td>{escaped_pipeline}</td><td>{escaped_outcome}</td></tr>"
-            )
+            results += f"<tr><td><a href='{escaped_run_url}'>{escaped_job_name}</td><td>{escaped_pipeline}</td><td>{escaped_outcome}</td></tr>"
 
     if results:
         results += "</table>"
@@ -68,7 +62,8 @@ def main(
         raise typer.Exit(0)
 
     typer.echo(f"::set-output name=result::{results}")
-    raise typer.Exit(1) # Original script exits with 1 if there are results
+    raise typer.Exit(1)  # Original script exits with 1 if there are results
+
 
 if __name__ == "__main__":
     app()
