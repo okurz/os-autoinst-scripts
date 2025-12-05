@@ -3,11 +3,9 @@
 """The script queries the openQA database for incomplete jobs and prints their URL and details.
 """
 import typer
-from rich.console import Console
-from sh import ssh
+from os_autoinst_scripts._common import console, ErrorReturnCode, ssh
 
 app = typer.Typer()
-console = Console()
 
 
 @app.command()
