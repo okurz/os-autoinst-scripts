@@ -4,11 +4,9 @@
 """
 
 import typer
-from rich.console import Console
-from sh import osc
+from os_autoinst_scripts._common import console, osc
 
 app = typer.Typer()
-console = Console()
 
 
 @app.command()
