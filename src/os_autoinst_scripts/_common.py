@@ -10,7 +10,25 @@ from typing import List, Optional
 
 import httpx
 from rich.console import Console
-from sh import CommandNotFound
+from sh import (
+    basename,
+    CommandNotFound,
+    cut,
+    ErrorReturnCode,
+    git,
+    git_obs,
+    grep,
+    nc,
+    openqa_cli,
+    osc,
+    ping,
+    rpmspec,
+    sed,
+    sort,
+    ssh,
+    tr,
+    zypper,
+)
 
 console = Console()
 
