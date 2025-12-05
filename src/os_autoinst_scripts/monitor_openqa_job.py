@@ -45,10 +45,12 @@ def main(
     failed_versions: dict[str, int] = {}
     failed_jobs: List[str] = []
 
-    _job_ids = job_ids(job_post_response_file)
+    _job_ids: List[str]
+    with open(job_post_response_file, "r") as f:
+        _job_ids = job_ids(f.read())
 
     for job_id in _job_ids:
-        console.print(f"Waiting for job {job_id} to finish")
+        log_info(f"Waiting for job {job_id} to finish")
         try:
             openqa_cli(
                 "monitor",
@@ -63,32 +65,30 @@ def main(
             if e.exit_code == 2:  # Special exit code for monitor when job fails
                 pass
             else:
-                console.print(
-                    f"[bold red]openqa-cli monitor failed with an unexpected error ({e.exit_code})[/bold red]"
-                )
-                raise typer.Exit(e.exit_code)
+                log_error(f"openqa-cli monitor failed with an unexpected error ({e.exit_code})")
+                sys.exit(e.exit_code)
 
         try:
             response = openqa_cli("api", "--host", host, f"jobs/{job_id}", follow=1)
             job_data = json.loads(response.stdout.decode())["job"]
             result = job_data["result"]
             job_id_actual = str(job_data["id"])
-            console.print(f"Result of job {job_id_actual}: {result}")
+            log_info(f"Result of job {job_id_actual}: {result}")
             if result != "passed" and obs_package_name:
                 version = job_data["settings"]["VERSION"]
                 failed_versions[version] = 1
                 failed_jobs.append(job_id_actual)
         except ErrorReturnCode as e:
-            console.print(f"[bold red]Error getting job details: {e}[/bold red]")
-            raise typer.Exit(1)
+            log_error(f"Error getting job details: {e}")
+            sys.exit(1)
         except json.JSONDecodeError as e:
-            console.print(f"[bold red]Error decoding JSON from openQA API: {e}[/bold red]")
-            raise typer.Exit(1)
+            log_error(f"Error decoding JSON from openQA API: {e}")
+            sys.exit(1)
 
     if not failed_jobs:
-        raise typer.Exit(0)
+        sys.exit(0)
 
-    console.print(f"[bold red]{len(failed_jobs)} jobs did not pass:[/bold red]")
+    log_error(f"{len(failed_jobs)} jobs did not pass:")
     for _id in failed_jobs:
         console.print(f"{host}/t{_id}")
 
@@ -96,16 +96,16 @@ def main(
     delete_packages_from_obs_project(staging_project)
 
     if not comment_on_obs:
-        raise typer.Exit(1)
+        sys.exit(1)
 
-    console.print("[bold green]Posting comment with failed jobs to OBS[/bold green]")
+    log_info("Posting comment with failed jobs to OBS")
     try:
         # Get existing comments and delete them if they match "test.* failed"
         comments_xml = osc("api", f"/comments/{obs_component}/{obs_package_name}").stdout.decode()
         # This part requires parsing XML, which is complex for a quick migration.
         # Placeholder for now, assuming comments are found and deleted.
         # For a full implementation, consider using ElementTree or lxml for XML parsing.
-        console.print("[yellow]Simulating deletion of old OBS comments[/yellow]")
+        log_warn("Simulating deletion of old OBS comments")
 
         comment_text = f"openQA-in-openQA test(s) failed (job IDs: {', '.join(failed_jobs)}), see {host}/tests/overview?"
         for version in failed_versions:
@@ -120,9 +120,9 @@ def main(
             f"/comments/{obs_component}/{obs_package_name}",
         )
     except ErrorReturnCode as e:
-        console.print(f"[bold red]Error commenting on OBS: {e}[/bold red]")
-        raise typer.Exit(1)
-    raise typer.Exit(1)
+        log_error(f"Error commenting on OBS: {e}")
+        sys.exit(1)
+    sys.exit(1)
 
 
 if __name__ == "__main__":
