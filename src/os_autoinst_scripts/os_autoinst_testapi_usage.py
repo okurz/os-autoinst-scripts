@@ -2,13 +2,12 @@
 # Copyright SUSE LLC
 """The script uses ripgrep to find the usage of testapi.pm functions in a given repository."""
 import pathlib
+from typing import List
 
 import typer
-from rich.console import Console
-from sh import cut, grep, rg, sort
+from os_autoinst_scripts._common import console, cut, ErrorReturnCode, grep, rg, sort
 
 app = typer.Typer()
-console = Console()
 
 
 def get_function_list(testapi_path: str) -> list[str]:
@@ -25,7 +24,7 @@ def get_function_list(testapi_path: str) -> list[str]:
             )
         )
         return functions.stdout.decode().splitlines()
-    except Exception:
+    except ErrorReturnCode:
         return []
 
 
@@ -55,7 +54,7 @@ def main(
                 usage = rg("--engine", "pcre2", "--stats", f"(?<!_){function}", repo)
                 stats = usage.stderr.decode().splitlines()[-1]
                 console.print(f"{repo} - {function} : {stats}")
-            except Exception:
+            except ErrorReturnCode:
                 console.print(f"{repo} - {function} : 0 matches")
 
 
