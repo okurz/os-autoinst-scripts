@@ -4,15 +4,13 @@
 label_issue for each of them.
 """
 import sys
-from typing import List
 
 import typer
-from rich.console import Console
+from os_autoinst_scripts._common import console
 
 from .openqa_label_known_issues import label_issue
 
 app = typer.Typer()
-console = Console()
 
 
 @app.command()
