@@ -18,7 +18,7 @@ def main() -> None:
     """Take a list of openQA test URLs from standard input and call
     label_issue for each of them.
     """
-    to_review: List[str] = []
+    to_review: list[str] = []
     for line in sys.stdin:
         testurl = line.strip().split(" ")[0]
         try:
