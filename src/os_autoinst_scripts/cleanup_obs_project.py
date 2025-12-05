@@ -4,27 +4,25 @@
 The script cleans up a project on OBS.
 """
 import typer
-from rich.console import Console
-from sh import osc, ErrorReturnCode
+from os_autoinst_scripts._common import console, log_error, log_warn, osc, ErrorReturnCode
 
 app = typer.Typer()
-console = Console()
 
 
 def delete_packages_from_obs_project(obs_project: str) -> None:
     """
     Deletes all packages from an OBS project.
     """
-    console.print(f"[yellow]Deleting packages from OBS project: {obs_project}[/yellow]")
+    log_warn(f"Deleting packages from OBS project: {obs_project}")
     try:
         packages = osc("ls", obs_project).stdout.decode().splitlines()
         for package in packages:
             package = package.strip()
             if package:
-                console.print(f"[yellow]Deleting package {obs_project}/{package}[/yellow]")
+                log_warn(f"Deleting package {obs_project}/{package}")
                 osc("rdelete", "-m", f"Cleaning up {package} from {obs_project}", obs_project, package)
     except ErrorReturnCode as e:
-        console.print(f"[bold red]Error deleting packages from OBS project: {e.stderr}[/bold red]")
+        log_error(f"Error deleting packages from OBS project: {e.stderr}")
         raise typer.Exit(1)
 
 
@@ -37,7 +35,7 @@ def main(
     Cleans up a project on OBS.
     """
     if confirmation != "I am sure":
-        console.print("[bold red]Skipping, pass 'I am sure' as 2nd argument to confirm[/bold red]")
+        log_error("Skipping, pass 'I am sure' as 2nd argument to confirm")
         raise typer.Exit(2)
 
     delete_packages_from_obs_project(obs_project)
