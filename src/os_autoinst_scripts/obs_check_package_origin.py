@@ -7,23 +7,21 @@ import sys
 from typing import List
 
 import typer
-from rich.console import Console
-from sh import (
-    osc,
-    zypper,
-    rpmspec,
-    grep,
-    cut,
-    sort,
-    sed,
-    tr,
-    head,
+from os_autoinst_scripts._common import (
     basename,
+    console,
+    cut,
     ErrorReturnCode,
+    grep,
+    osc,
+    rpmspec,
+    sed,
+    sort,
+    tr,
+    zypper,
 )
 
 app = typer.Typer()
-console = Console()
 osc_cmd = osc.bake("--apiurl", "https://api.opensuse.org")
 
 
