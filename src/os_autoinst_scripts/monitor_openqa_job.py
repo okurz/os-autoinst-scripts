@@ -10,11 +10,14 @@ import time
 from typing import List, Optional
 
 import typer
-from rich.console import Console
-from sh import ErrorReturnCode, openqa_cli, osc
+from os_autoinst_scripts._common import (
+    console,
+    log_info,
+    log_warn,
+    log_error,
+)
 
 app = typer.Typer()
-console = Console()
 
 
 # Placeholder for _common functions, assuming job_ids and delete_packages_from_obs_project
