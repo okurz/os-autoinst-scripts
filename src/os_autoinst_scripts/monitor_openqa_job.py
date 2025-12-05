@@ -15,22 +15,14 @@ from os_autoinst_scripts._common import (
     log_info,
     log_warn,
     log_error,
+    ErrorReturnCode,
+    openqa_cli,
+    osc,
+    job_ids,
+    delete_packages_from_obs_project,
 )
 
 app = typer.Typer()
-
-
-# Placeholder for _common functions, assuming job_ids and delete_packages_from_obs_project
-def job_ids(job_post_response_file: str) -> List[str]:
-    # In a real scenario, this would parse the job_post_response_file
-    # For now, let's assume it contains job IDs separated by newlines
-    with open(job_post_response_file, "r") as f:
-        return f.read().strip().splitlines()
-
-
-def delete_packages_from_obs_project(project: str) -> None:
-    # Placeholder for actual OBS deletion logic
-    console.print(f"[yellow]Simulating deletion of packages from OBS project: {project}[/yellow]")
 
 
 @app.command()
