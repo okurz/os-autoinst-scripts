@@ -1,5 +1,6 @@
 # Copyright SUSE LLC
 import json
+import pathlib
 from unittest.mock import MagicMock
 
 from pytest_mock import MockerFixture
@@ -73,7 +74,7 @@ def test_set_due_date_from_file(mocker: MockerFixture) -> None:
             }
         ]
     }
-    with open("test.json", "w") as f:
+    with pathlib.Path("test.json").open("w") as f:
         json.dump(issues, f)
 
     result = runner.invoke(

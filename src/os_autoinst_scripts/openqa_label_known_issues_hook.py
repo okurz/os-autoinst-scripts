@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-""""hook script" intended to be called by openQA instances taking a job ID as
+""" "hook script" intended to be called by openQA instances taking a job ID as
 parameter and forwarding a complete job URL to "openqa-label-known-issues-multi"
 on stdin
 """
+
 import typer
-from os_autoinst_scripts._common import console, ErrorReturnCode, runcli
+
+from os_autoinst_scripts._common import ErrorReturnCode, console, runcli
 
 app = typer.Typer()
 
@@ -16,8 +18,7 @@ def main(
     host: str = typer.Option("openqa.opensuse.org", help="openqa host"),
     scheme: str = typer.Option("https", help="URL scheme"),
 ) -> None:
-    """Take a job ID, construct a URL, and pipe it to openqa-label-known-issues-multi.
-    """
+    """Take a job ID, construct a URL, and pipe it to openqa-label-known-issues-multi."""
     host_url = f"{scheme}://{host}"
     url = f"{host_url}/tests/{job_id}"
     try:

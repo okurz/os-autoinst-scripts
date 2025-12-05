@@ -1,30 +1,15 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script automates the submission of packages to OBS.
-"""
-import datetime
-import json
-import os
-import re
-import sys
-import tempfile
+"""The script automates the submission of packages to OBS."""
+
 from typing import Dict, List, Optional
 
-import httpx
 import typer
+
 from os_autoinst_scripts._common import (
     console,
-    ErrorReturnCode,
-    git,
-    git_obs,
-    log_error,
     log_info,
     log_warn,
-    osc,
-    rpmspec,
-    runcli,
-    zypper,
 )
 
 app = typer.Typer()
@@ -51,15 +36,13 @@ def get_obs_sr_id(target: str, dst_project: str, package: str) -> Optional[str]:
 
 
 def reenable_buildtime_services(package_dir: str) -> None:
-    _run_cmd(
-        [
-            "sed",
-            "-i",
-            "-e",
-            's,mode="buildtime" mode="disabled",mode="buildtime",',
-            f"{package_dir}/_service",
-        ]
-    )
+    _run_cmd([
+        "sed",
+        "-i",
+        "-e",
+        's,mode="buildtime" mode="disabled",mode="buildtime",',
+        f"{package_dir}/_service",
+    ])
 
 
 def wait_for_package_build(target: str, package: str, dst_project: str, dry_run: bool) -> bool:
@@ -95,9 +78,7 @@ def last_revision(project: str, package: str, submit_target: str) -> Optional[st
     return None
 
 
-def sync_changesrevision(
-    src_project: str, package: str, target_rev: str, submit_target: str, dry_run: bool
-) -> None:
+def sync_changesrevision(src_project: str, package: str, target_rev: str, submit_target: str, dry_run: bool) -> None:
     log_info(f"Simulating sync_changesrevision for {src_project}/{package} to {target_rev}")
     if dry_run:
         console.print(f"Would sync changesrevision for {src_project}/{package}")
@@ -190,9 +171,7 @@ def main_app(
     throttle_days: int = typer.Option(2, help="Throttle days"),
     throttle_days_leap_16: int = typer.Option(7, help="Throttle days for Leap 16"),
 ) -> None:
-    """
-    Automates the submission of packages to OBS.
-    """
+    """Automates the submission of packages to OBS."""
     submit_target_list = submit_target_str.split(",") + submit_target_extra_str.split(",")
     global failed_packages
     failed_packages = []
@@ -204,9 +183,7 @@ def main_app(
     packages_to_submit = ["test-package-1", "test-package-2"]
 
     for package in packages_to_submit:
-        failed_packages.extend(
-            update_package(package, submit_target_list, dry_run, git_branches, throttle_vars)
-        )
+        failed_packages.extend(update_package(package, submit_target_list, dry_run, git_branches, throttle_vars))
 
     if failed_packages:
         log_warn("Failed packages:")

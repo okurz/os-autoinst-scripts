@@ -21,9 +21,7 @@ def test_wip_limit_not_exceeded(mocker: MockerFixture) -> None:
         },
     )
 
-    result = runner.invoke(
-        app, ["--redmine-api-key", "dummy-key", "--wip-limit", "3"]
-    )
+    result = runner.invoke(app, ["--redmine-api-key", "dummy-key", "--wip-limit", "3"])
 
     assert result.exit_code == 0
     assert "WIP limit not exceeded" in result.stdout
@@ -42,9 +40,7 @@ def test_wip_limit_exceeded(mocker: MockerFixture) -> None:
         },
     )
 
-    result = runner.invoke(
-        app, ["--redmine-api-key", "dummy-key", "--wip-limit", "2"]
-    )
+    result = runner.invoke(app, ["--redmine-api-key", "dummy-key", "--wip-limit", "2"])
 
     assert result.exit_code == 1
     assert "WIP limit exceeded" in result.stdout
@@ -54,9 +50,7 @@ def test_redmine_error(mocker: MockerFixture) -> None:
     mock_get = mocker.patch("httpx.get")
     mock_get.side_effect = Exception("Something went wrong")
 
-    result = runner.invoke(
-        app, ["--redmine-api-key", "dummy-key", "--wip-limit", "2"]
-    )
+    result = runner.invoke(app, ["--redmine-api-key", "dummy-key", "--wip-limit", "2"])
 
     assert result.exit_code == 1
     assert isinstance(result.exception, SystemExit)

@@ -3,9 +3,11 @@
 """The script takes a list of openQA test URLs from standard input and calls
 label_issue for each of them.
 """
+
 import sys
 
 import typer
+
 from os_autoinst_scripts._common import console
 
 from .openqa_label_known_issues import label_issue

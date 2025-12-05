@@ -9,9 +9,7 @@ runner = CliRunner()
 
 
 def test_label_known_issues_multi(mocker: MockerFixture) -> None:
-    mock_label_issue = mocker.patch(
-        "os_autoinst_scripts.openqa_label_known_issues_multi.label_issue"
-    )
+    mock_label_issue = mocker.patch("os_autoinst_scripts.openqa_label_known_issues_multi.label_issue")
 
     result = runner.invoke(app, input="http://example.com/1\nhttp://example.com/2\n")
 
@@ -20,9 +18,7 @@ def test_label_known_issues_multi(mocker: MockerFixture) -> None:
 
 
 def test_label_known_issues_multi_with_failures(mocker: MockerFixture) -> None:
-    mock_label_issue = mocker.patch(
-        "os_autoinst_scripts.openqa_label_known_issues_multi.label_issue"
-    )
+    mock_label_issue = mocker.patch("os_autoinst_scripts.openqa_label_known_issues_multi.label_issue")
     mock_label_issue.side_effect = [None, SystemExit(1)]
 
     result = runner.invoke(app, input="http://example.com/1\nhttp://example.com/2\n")

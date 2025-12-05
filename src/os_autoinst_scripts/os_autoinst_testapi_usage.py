@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
 """The script uses ripgrep to find the usage of testapi.pm functions in a given repository."""
+
 import pathlib
 from typing import List
 
 import typer
-from os_autoinst_scripts._common import console, cut, ErrorReturnCode, grep, rg, sort
+
+from os_autoinst_scripts._common import ErrorReturnCode, console, cut, grep, rg, sort
 
 app = typer.Typer()
 

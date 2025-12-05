@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""The script queries the openQA database for jobs that are candidates for investigation.
-"""
+"""The script queries the openQA database for jobs that are candidates for investigation."""
+
 import typer
-from os_autoinst_scripts._common import console, ErrorReturnCode, ssh
+
+from os_autoinst_scripts._common import console, ssh
 
 app = typer.Typer()
 
@@ -30,22 +31,19 @@ def main(
     ),
     additional_query: str = typer.Option("", help="Optional additional query"),
 ) -> None:
-    """Query the openQA database for jobs that are candidates for investigation.
-    """
+    """Query the openQA database for jobs that are candidates for investigation."""
     if not ssh_host:
         ssh_host = host
 
     failed_since = f"(timezone('UTC', now()) - interval '{interval}')"
     group_query = f" group_id={group_id} and" if group_id else ""
-    exclude_group_query = (
-        f" and job_groups.name not similar to '{exclude_group}'" if exclude_group else ""
-    )
-    exclude_parent_query = (
-        f" where job_group_parents.name not similar to '{exclude_parent}'" if exclude_parent else ""
-    )
+    exclude_group_query = f" and job_groups.name not similar to '{exclude_group}'" if exclude_group else ""
+    exclude_parent_query = f" where job_group_parents.name not similar to '{exclude_parent}'" if exclude_parent else ""
     additional_query = f" and {additional_query}" if additional_query else ""
 
-    query_common_prefix = "select jobs.id,jobs.test, job_groups.parent_id from jobs left join job_groups on jobs.group_id = job_groups.id"
+    query_common_prefix = (
+        "select jobs.id,jobs.test, job_groups.parent_id from jobs left join job_groups on jobs.group_id = job_groups.id"
+    )
     query_common_suffix = f"result='{result}' and clone_id is null and{group_query} t_finished >= {failed_since}{comment_query}{additional_query}{exclude_group_query}"
     query = f"with included_jobs as ({query_common_prefix} where {query_common_suffix}) select included_jobs.id, test from included_jobs left join job_group_parents on parent_id = job_group_parents.id{exclude_parent_query} union all select included_jobs.id, test from included_jobs where parent_id is null;"
 

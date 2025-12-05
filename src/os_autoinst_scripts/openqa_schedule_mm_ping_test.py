@@ -1,27 +1,24 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script schedules a ping test on openQA by generating a YAML configuration and then using openqa-cli schedule.
-"""
+"""The script schedules a ping test on openQA by generating a YAML configuration and then using openqa-cli schedule."""
+
 import datetime
 import json
-import os
+import pathlib
 import re
-import sys
 import tempfile
-from typing import List
 
 import typer
 import yaml
-from os_autoinst_scripts._common import console, log_error, ErrorReturnCode, openqa_cli, runcurl
+
+from os_autoinst_scripts._common import ErrorReturnCode, log_error, openqa_cli, runcurl
 
 app = typer.Typer()
 
 
 def download_scenario() -> str:
     scenario_url = (
-        f"https://raw.githubusercontent.com/os-autoinst/os-autoinst-distri-openQA/master/"
-        f"{SCENARIO_DEFINITIONS}"
+        f"https://raw.githubusercontent.com/os-autoinst/os-autoinst-distri-openQA/master/{SCENARIO_DEFINITIONS}"
     )
     try:
         response_text = runcurl([scenario_url])
@@ -45,9 +42,7 @@ def main(
     build_regex: str = typer.Option("^[0-9]+$", help="Build regex"),
     machine: str = typer.Option("64bit", help="Machine"),
 ) -> None:
-    """
-    Schedules a ping test on openQA.
-    """
+    """Schedules a ping test on openQA."""
     scenario_definitions = {
         "products": {
             "mm-ping-test": {
@@ -109,7 +104,9 @@ def main(
         hdd = None
         for job in jobs["jobs"]:
             if job["result"] == "passed" and re.match(build_regex, job["settings"]["BUILD"]):
-                if not hdd or job["settings"]["BUILD"] > job["settings"]["BUILD"]: # Fixed: hdd should be job["settings"]["HDD_1"]
+                if (
+                    not hdd or job["settings"]["BUILD"] > job["settings"]["BUILD"]
+                ):  # Fixed: hdd should be job["settings"]["HDD_1"]
                     hdd = job["settings"]["HDD_1"]
 
         if not hdd:
@@ -138,7 +135,7 @@ def main(
         log_error(f"Error scheduling job: {e.stderr.decode()}")
         raise typer.Exit(1)
     finally:
-        os.remove(tmpfile_name)
+        pathlib.Path(tmpfile_name).unlink()
 
 
 if __name__ == "__main__":

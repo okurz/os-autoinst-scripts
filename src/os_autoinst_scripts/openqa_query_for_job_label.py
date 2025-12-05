@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""The script queries the openQA database for jobs with a specific comment.
-"""
+"""The script queries the openQA database for jobs with a specific comment."""
+
 from typing import List
 
 import typer
-from os_autoinst_scripts._common import ErrorReturnCode, console, ssh
+
+from os_autoinst_scripts._common import console, ssh
 
 app = typer.Typer()
 
@@ -22,8 +23,7 @@ def main(
     limit: int = typer.Option(10, help="Limit the number of results"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Do not do any action on openQA"),
 ) -> None:
-    """Query the openQA database for jobs with a specific comment.
-    """
+    """Query the openQA database for jobs with a specific comment."""
     failed_since = f"(timezone('UTC', now()) - interval '{interval}')"
     query = f"select jobs.id,t_finished,state,result,test,reason,host from jobs, comments, workers where t_finished >= {failed_since} and jobs.assigned_worker_id = workers.id and jobs.id = comments.job_id and comments.text ~ '{comment}' order by t_finished desc limit {limit};"
 

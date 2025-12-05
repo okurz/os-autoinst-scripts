@@ -16,4 +16,7 @@ def test_investigate_multi(mocker: MockerFixture) -> None:
 
     assert result.exit_code == 0
     assert mock_run.call_count == 2
-    mock_run.assert_has_calls([call(["openqa-investigate", "123"], check=True), call(["openqa-investigate", "456"], check=True)])
+    mock_run.assert_has_calls([
+        call(["openqa-investigate", "123"], check=True),
+        call(["openqa-investigate", "456"], check=True),
+    ])

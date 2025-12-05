@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script checks the origin of packages and their versions in OBS and Tumbleweed.
-"""
-import sys
+"""The script checks the origin of packages and their versions in OBS and Tumbleweed."""
+
 from typing import List
 
 import typer
+
 from os_autoinst_scripts._common import (
+    ErrorReturnCode,
     basename,
     console,
-    cut,
-    ErrorReturnCode,
     grep,
     osc,
     rpmspec,
     sed,
-    sort,
-    tr,
     zypper,
 )
 
@@ -45,20 +41,20 @@ def get_tw_version(package: str) -> str:
         pass
     return "-"
 
+
 def get_package_name(req: str) -> str:
     try:
-        package = req.split(" ")[0]
+        package = req.split(" ", maxsplit=1)[0]
         output = osc_cmd.se("--package", package).stdout.decode()
         return output.split("'")[1]
     except (ErrorReturnCode, IndexError):
         return ""
 
+
 def list_requirements(package: str) -> List[str]:
     try:
         spec_content = osc_cmd.cat("devel:openQA", package, f"_service:obs_scm:{package}.spec")
-        spec_content = sed(
-            "-e", "/node_modules.spec.inc/d", _in=spec_content
-        ).stdout.decode()
+        spec_content = sed("-e", "/node_modules.spec.inc/d", _in=spec_content).stdout.decode()
         build_requires = rpmspec(
             "-q",
             "-D",
@@ -83,11 +79,13 @@ def list_requirements(package: str) -> List[str]:
     except ErrorReturnCode:
         return []
 
+
 def get_codestream(package: str) -> str:
     try:
         return osc_cmd.sm(package, _err_to_out=True).stdout.decode().split(" ")[0]
     except ErrorReturnCode:
         return ""
+
 
 def find_source_package(package: str) -> str:
     try:
@@ -98,21 +96,16 @@ def find_source_package(package: str) -> str:
                 search_output = zypper(
                     "-n", "--no-refresh", "--xmlout", "se", "-t", "srcpackage", source_package
                 ).stdout.decode()
-                return grep(
-                    "-oP", "'[^']+'", _in=search_output
-                ).stdout.decode().strip().replace("'", "")
+                return grep("-oP", "'[^']+'", _in=search_output).stdout.decode().strip().replace("'", "")
     except (ErrorReturnCode, IndexError):
         pass
     return ""
 
+
 def search_provides(req: str) -> List[str]:
     try:
-        provides_output = zypper(
-            "-n", "--no-refresh", "--xmlout", "se", "--provides", req
-        ).stdout.decode()
-        provides = grep(
-            "-oP", "'[^']+'", _in=provides_output
-        ).stdout.decode().strip().replace("'", "").splitlines()
+        provides_output = zypper("-n", "--no-refresh", "--xmlout", "se", "--provides", req).stdout.decode()
+        provides = grep("-oP", "'[^']+'", _in=provides_output).stdout.decode().strip().replace("'", "").splitlines()
         console.print(f"{req} is provided by {provides}")
         source_packages = []
         for prov in provides:
@@ -122,6 +115,7 @@ def search_provides(req: str) -> List[str]:
         return [get_codestream(src) for src in sorted(list(set(source_packages)))]
     except ErrorReturnCode:
         return []
+
 
 def list_versions(package: str) -> None:
     codestreams = []
@@ -140,9 +134,7 @@ def list_versions(package: str) -> None:
 
 @app.command()
 def main(packages: List[str] = typer.Argument(..., help="Package name(s)")) -> None:
-    """
-    Check the origin of packages and their versions in OBS and Tumbleweed.
-    """
+    """Check the origin of packages and their versions in OBS and Tumbleweed."""
     for package in packages:
         list_versions(package)
 

@@ -1,7 +1,5 @@
 # Copyright SUSE LLC
-import json
-import os
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 from pytest_mock import MockerFixture
 from typer.testing import CliRunner
@@ -27,9 +25,7 @@ def test_trigger_openqa_in_openqa(mocker: MockerFixture) -> None:
         return_value=0,
     )
 
-    mock_httpx_get.return_value = MagicMock(
-        raise_for_status=MagicMock(), content=b"scenario_content"
-    )
+    mock_httpx_get.return_value = MagicMock(raise_for_status=MagicMock(), content=b"scenario_content")
     mock_subprocess_run.return_value = MagicMock(stdout="job_id: 12345\n")
 
     result = runner.invoke(app)
@@ -58,9 +54,7 @@ def test_trigger_openqa_in_openqa_full_run(mocker: MockerFixture) -> None:
         return_value=0,
     )
 
-    mock_httpx_get.return_value = MagicMock(
-        raise_for_status=MagicMock(), content=b"scenario_content"
-    )
+    mock_httpx_get.return_value = MagicMock(raise_for_status=MagicMock(), content=b"scenario_content")
     mock_subprocess_run.return_value = MagicMock(stdout="job_id: 12345\n")
 
     result = runner.invoke(app, ["--full-run"])

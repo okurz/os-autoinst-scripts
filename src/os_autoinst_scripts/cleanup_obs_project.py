@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script cleans up a project on OBS.
-"""
+"""The script cleans up a project on OBS."""
+
 import typer
-from os_autoinst_scripts._common import console, log_error, log_warn, osc, ErrorReturnCode
+
+from os_autoinst_scripts._common import ErrorReturnCode, log_error, log_warn, osc
 
 app = typer.Typer()
 
 
 def delete_packages_from_obs_project(obs_project: str) -> None:
-    """
-    Deletes all packages from an OBS project.
-    """
+    """Deletes all packages from an OBS project."""
     log_warn(f"Deleting packages from OBS project: {obs_project}")
     try:
         packages = osc("ls", obs_project).stdout.decode().splitlines()
@@ -31,9 +29,7 @@ def main(
     obs_project: str = typer.Argument(..., help="OBS project to clean up"),
     confirmation: str = typer.Argument(..., help="Confirmation phrase ('I am sure')"),
 ) -> None:
-    """
-    Cleans up a project on OBS.
-    """
+    """Cleans up a project on OBS."""
     if confirmation != "I am sure":
         log_error("Skipping, pass 'I am sure' as 2nd argument to confirm")
         raise typer.Exit(2)

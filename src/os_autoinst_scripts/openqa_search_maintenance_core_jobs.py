@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""The script searches for jobs in openQA related to a maintenance update.
-"""
-
-import re
-from typing import List
+"""The script searches for jobs in openQA related to a maintenance update."""
 
 import httpx
 import typer
+
 from os_autoinst_scripts._common import console, log_error, log_warn
 
 app = typer.Typer()
@@ -51,7 +48,7 @@ def search_maintenance_single_incidents(review_request_id: str) -> None:
     versions_teradata = sorted(
         list(
             set(
-                f'{i["settings"]["VERSION"]}-TERADATA'
+                f"{i['settings']['VERSION']}-TERADATA"
                 for i in incident_settings
                 if "TERADATA" in i["settings"].get("FLAVOR", "")
             )
@@ -144,11 +141,7 @@ def search_maintenance_aggregated(review_request_id: str, days: int) -> None:
                 log_error(f"Error querying openqa: {e}")
                 continue
 
-            issues = [
-                value
-                for key, value in job["settings"].items()
-                if "_TEST_ISSUES" in key
-            ]
+            issues = [value for key, value in job["settings"].items() if "_TEST_ISSUES" in key]
             if update_id in "".join(issues):
                 console.print(f"Version: '{version}' Update: '{update_id}'")
                 console.print(f"Build {build} contains {update_id}")
@@ -207,8 +200,7 @@ def main_app(
     review_request_id: str = typer.Argument(..., help="SUSE:Maintenance:II:RR"),
     days: int = typer.Option(5, help="Days to search for aggregated updates"),
 ) -> None:
-    """Search for jobs in openQA related to a maintenance update.
-    """
+    """Search for jobs in openQA related to a maintenance update."""
     search_maintenance_single_incidents(review_request_id)
     search_maintenance_aggregated(review_request_id, days)
     search_build_checks(review_request_id)

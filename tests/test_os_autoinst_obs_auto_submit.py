@@ -1,5 +1,4 @@
 # Copyright SUSE LLC
-from unittest.mock import MagicMock
 
 from pytest_mock import MockerFixture
 from typer.testing import CliRunner
@@ -26,9 +25,7 @@ def test_obs_auto_submit_success(mocker: MockerFixture) -> None:
         "os_autoinst_scripts.os_autoinst_obs_auto_submit.get_obs_sr_id",
         return_value=None,
     )
-    mocker.patch(
-        "os_autoinst_scripts.os_autoinst_obs_auto_submit.log_info"
-    )  # Mock log_info
+    mocker.patch("os_autoinst_scripts.os_autoinst_obs_auto_submit.log_info")  # Mock log_info
 
     result = runner.invoke(app, ["main-app"])
 
