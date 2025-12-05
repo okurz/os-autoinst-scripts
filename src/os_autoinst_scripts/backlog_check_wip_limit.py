@@ -3,12 +3,12 @@
 """The script checks if the number of "In Progress" tickets in a Redmine query is within a certain limit.
 """
 
+import sys
 import httpx
 import typer
-from rich.console import Console
+from os_autoinst_scripts._common import console
 
 app = typer.Typer()
-console = Console()
 
 
 @app.command()
