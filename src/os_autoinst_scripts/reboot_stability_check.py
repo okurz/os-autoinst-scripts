@@ -7,8 +7,9 @@ import time
 
 import typer
 from rich.console import Console
-from sh import ErrorReturnCode, nc, ping, ssh
 from tenacity import retry, stop_after_delay, wait_fixed
+
+from os_autoinst_scripts._common import ErrorReturnCode, nc, ping, ssh
 
 app = typer.Typer()
 console = Console()
