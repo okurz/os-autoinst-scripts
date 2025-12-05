@@ -3,12 +3,14 @@
 """The script searches for jobs in openQA related to a maintenance update.
 """
 
+import re
+from typing import List
+
 import httpx
 import typer
-from rich.console import Console
+from os_autoinst_scripts._common import console, log_error, log_warn
 
 app = typer.Typer()
-console = Console()
 
 DICT_GROUP = {
     "15-SP1": 233,
@@ -41,7 +43,7 @@ def search_maintenance_single_incidents(review_request_id: str) -> None:
         response.raise_for_status()
         incident_settings = response.json()
     except httpx.HTTPError as e:
-        console.print(f"[bold red]Error querying dashboard.qam.suse.de: {e}[/bold red]")
+        log_error(f"Error querying dashboard.qam.suse.de: {e}")
         return
 
     build = incident_settings[0]["settings"]["BUILD"]
@@ -67,7 +69,7 @@ def search_maintenance_single_incidents(review_request_id: str) -> None:
             response.raise_for_status()
             jobs = response.json()
         except httpx.HTTPError as e:
-            console.print(f"[bold red]Error querying openqa: {e}[/bold red]")
+            log_error(f"Error querying openqa: {e}")
             continue
 
         if not jobs:
@@ -83,7 +85,7 @@ def search_maintenance_single_incidents(review_request_id: str) -> None:
         try:
             running_jobs = httpx.get(running_url).json()
             if running_jobs:
-                rich_print(f"RUNNING / SCHEDULED ({len(running_jobs)} jobs) Awaiting completion...", "yellow")
+                log_warn(f"RUNNING / SCHEDULED ({len(running_jobs)} jobs) Awaiting completion...")
                 console.print("")
                 continue
             failed_jobs = httpx.get(failed_url).json()
@@ -93,7 +95,7 @@ def search_maintenance_single_incidents(review_request_id: str) -> None:
                 rich_print(f"FAILED ({len(failed_jobs)} jobs)", "red")
             console.print("")
         except httpx.HTTPError as e:
-            console.print(f"[bold red]Error querying openqa: {e}[/bold red]")
+            log_error(f"Error querying openqa: {e}")
     console.print("---")
 
 
@@ -107,7 +109,7 @@ def search_maintenance_aggregated(review_request_id: str, days: int) -> None:
         response.raise_for_status()
         versions = sorted(list(set(i["settings"]["VERSION"] for i in response.json())))
     except httpx.HTTPError as e:
-        console.print(f"[bold red]Error querying dashboard.qam.suse.de: {e}[/bold red]")
+        log_error(f"Error querying dashboard.qam.suse.de: {e}")
         return
 
     for version in versions:
@@ -126,7 +128,7 @@ def search_maintenance_aggregated(review_request_id: str, days: int) -> None:
                 response.raise_for_status()
                 jobs = response.json()
             except httpx.HTTPError as e:
-                console.print(f"[bold red]Error querying openqa: {e}[/bold red]")
+                log_error(f"Error querying openqa: {e}")
                 continue
 
             if not jobs:
@@ -139,7 +141,7 @@ def search_maintenance_aggregated(review_request_id: str, days: int) -> None:
                 response.raise_for_status()
                 job = response.json()["job"]
             except httpx.HTTPError as e:
-                console.print(f"[bold red]Error querying openqa: {e}[/bold red]")
+                log_error(f"Error querying openqa: {e}")
                 continue
 
             issues = [
@@ -158,7 +160,7 @@ def search_maintenance_aggregated(review_request_id: str, days: int) -> None:
                 try:
                     running_jobs = httpx.get(running_url).json()
                     if running_jobs:
-                        rich_print(f"RUNNING / SCHEDULED ({len(running_jobs)} jobs) Awaiting completion...", "yellow")
+                        log_warn(f"RUNNING / SCHEDULED ({len(running_jobs)} jobs) Awaiting completion...")
                         console.print("")
                         continue
                     failed_jobs = httpx.get(failed_url).json()
@@ -169,7 +171,7 @@ def search_maintenance_aggregated(review_request_id: str, days: int) -> None:
                     console.print("")
                     break
                 except httpx.HTTPError as e:
-                    console.print(f"[bold red]Error querying openqa: {e}[/bold red]")
+                    log_error(f"Error querying openqa: {e}")
     console.print("---")
 
 
@@ -196,7 +198,7 @@ def search_build_checks(review_request_id: str) -> None:
                         console.print(line)
                 console.print("")
     except httpx.HTTPError as e:
-        console.print(f"[bold red]Error querying qam.suse.de: {e}[/bold red]")
+        log_error(f"Error querying qam.suse.de: {e}")
     console.print("---")
 
 
