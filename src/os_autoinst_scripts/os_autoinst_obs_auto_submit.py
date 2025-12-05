@@ -7,18 +7,27 @@ import datetime
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 from typing import Dict, List, Optional
 
 import httpx
 import typer
-from rich.console import Console
-from sh import git, git_obs, osc, rpmspec, zypper, ErrorReturnCode
+from os_autoinst_scripts._common import (
+    console,
+    ErrorReturnCode,
+    git,
+    git_obs,
+    log_error,
+    log_info,
+    log_warn,
+    osc,
+    rpmspec,
+    runcli,
+    zypper,
+)
 
 app = typer.Typer()
-console = Console()
 
 SRC_PROJECT = "devel:openQA"
 DST_PROJECT = f"{SRC_PROJECT}:tested"
@@ -29,28 +38,10 @@ SUBMIT_TARGET_EXTRA_PROJECT = "openSUSE:Backports"
 XMLSTARLET = "xmlstarlet"  # Assuming xmlstarlet is installed and in PATH
 
 
-def _run_cmd(cmd: List[str], dry_run: bool = False, **kwargs) -> str:
-    if dry_run:
-        console.print(f"Would run: {' '.join(cmd)}")
-        return ""
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, **kwargs)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        console.print(f"[bold red]Error running command {' '.join(cmd)}: {e.stderr}[/bold red]")
-        raise typer.Exit(1)
-
-
-def log_info(message: str) -> None:
-    console.print(f"[blue]{message}[/blue]")
-
-
-def log_warn(message: str) -> None:
-    console.print(f"[yellow]{message}[/yellow]")
-
-
-def log_error(message: str) -> None:
-    console.print(f"[red]{message}[/red]")
+def get_obs_sr_id(target: str, dst_project: str, package: str) -> Optional[str]:
+    # Simplified, needs actual implementation based on xmlstarlet
+    log_info(f"Simulating get_obs_sr_id for {target}/{dst_project}/{package}")
+    return None
 
 
 def get_obs_sr_id(target: str, dst_project: str, package: str) -> Optional[str]:
