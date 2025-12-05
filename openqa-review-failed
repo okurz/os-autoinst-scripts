@@ -1,1 +1,58 @@
+#!/usr/bin/python3
+# Copyright SUSE LLC
+
+# ruff: noqa: E501
+r"""former bash script.
+
 "$(dirname "$0")"/openqa-monitor-investigation-candidates | "$(dirname "$0")"/openqa-label-known-issues-multi 3>&1 1> /dev/null 2>&3- | sed -n 's/\(\S*\) : Unknown test issue, to be reviewed.*$/\1/p' | "$(dirname "$0")"/openqa-investigate-multi
+"""
+
+import re
+from pathlib import Path
+
+import typer
+from sh import Command, CommandNotFound, ErrorReturnCode
+
+app = typer.Typer()
+
+
+@app.command()
+def main() -> None:
+    base_dir = Path(__file__).resolve().parent
+    try:
+        cmd_monitor = Command(base_dir / "openqa-monitor-investigation-candidates")
+        cmd_label = Command(base_dir / "openqa-label-known-issues-multi")
+        cmd_investigate = Command(base_dir / "openqa-investigate-multi")
+    except CommandNotFound as e:
+        typer.secho(f"Error: Required script not found: {e}", fg=typer.colors.RED)
+        raise typer.Exit(1) from None
+    try:
+        candidates = cmd_monitor()
+    except ErrorReturnCode as e:
+        typer.secho(f"Monitor step failed: {e}", fg=typer.colors.RED)
+        raise typer.Exit(1) from None
+
+    if not candidates:
+        return
+
+    try:
+        result = cmd_label(_in=candidates, _err_to_out=False, _ok_code=[0, 1])
+        raw_output = result.stderr.decode("utf-8")
+    except ErrorReturnCode as e:
+        raw_output = e.stderr.decode("utf-8")
+
+    regex = re.compile(r"(\S*) : Unknown test issue, to be reviewed")
+    job_ids = [
+        m.group(1)
+        for line in raw_output.splitlines()
+        if (m := regex.search(line))
+    ]
+
+    if not job_ids:
+        return
+    typer.echo(f"Triggering investigation for {len(job_ids)} jobs...")
+    cmd_investigate(_in="\n".join(job_ids), _fg=True)
+
+
+if __name__ == "__main__":
+    app()
