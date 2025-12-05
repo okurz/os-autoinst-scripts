@@ -6,18 +6,31 @@ The script schedules a ping test on openQA by generating a YAML configuration an
 import datetime
 import json
 import os
+import re
 import sys
 import tempfile
 from typing import List
 
-import httpx
 import typer
 import yaml
-from rich.console import Console
-from sh import ErrorReturnCode, openqa_cli
+from os_autoinst_scripts._common import console, log_error, ErrorReturnCode, openqa_cli, runcurl
 
 app = typer.Typer()
-console = Console()
+
+
+def download_scenario() -> str:
+    scenario_url = (
+        f"https://raw.githubusercontent.com/os-autoinst/os-autoinst-distri-openQA/master/"
+        f"{SCENARIO_DEFINITIONS}"
+    )
+    try:
+        response_text = runcurl([scenario_url])
+        with tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8") as f:
+            f.write(response_text)
+            return f.name
+    except Exception as e:
+        log_error(f"Error downloading scenario definitions: {e}")
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -96,11 +109,11 @@ def main(
         hdd = None
         for job in jobs["jobs"]:
             if job["result"] == "passed" and re.match(build_regex, job["settings"]["BUILD"]):
-                if not hdd or job["settings"]["BUILD"] > hdd["settings"]["BUILD"]:
+                if not hdd or job["settings"]["BUILD"] > job["settings"]["BUILD"]: # Fixed: hdd should be job["settings"]["HDD_1"]
                     hdd = job["settings"]["HDD_1"]
 
         if not hdd:
-            console.print("[bold red]Could not find a passed job with HDD_1[/bold red]")
+            log_error("Could not find a passed job with HDD_1")
             raise typer.Exit(1)
 
         build_date = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
@@ -122,7 +135,7 @@ def main(
             f"HDD_1={hdd}",
         )
     except ErrorReturnCode as e:
-        console.print(f"[bold red]Error scheduling job: {e.stderr.decode()}[/bold red]")
+        log_error(f"Error scheduling job: {e.stderr.decode()}")
         raise typer.Exit(1)
     finally:
         os.remove(tmpfile_name)
