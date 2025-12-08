@@ -13,7 +13,7 @@ import typer
 from rich.console import Console
 
 app = typer.Typer()
-console = Console()
+console = Console(color_system=None)
 
 HOST = "openqa.opensuse.org"
 SCHEME = "https"
@@ -368,16 +368,20 @@ def investigate(
     job_data = client_get_job(job_id, settings)
     old_name = job_data["job"]["test"]
 
+    if job_data["job"]["result"] == "passed":
+        console.print(f"[green]Job {job_id} passed, no investigation needed.[/green]")
+        raise typer.Exit(0)
+
     if re.search(settings.exclude_name_regex, old_name):
-        post_investigate(job_id, old_name, job_data, settings)
-        return
+        console.print(f"[yellow]Job {job_id} skipped because its name '{old_name}' matches exclusion regex '{settings.exclude_name_regex}'[/yellow]")
+        raise typer.Exit(0)
 
     clone_id = job_data["job"].get("clone_id")
     if not settings.force and clone_id is not None:
         console.print(
             f"[yellow]Job {job_id} already has a clone, skipping investigation. Use the env variable 'force=true' to trigger investigation jobs[/yellow]"
         )
-        return
+        raise typer.Exit(0)
 
     dependency_data = query_dependency_data_or_postpone(job_id, job_data, settings)
     if dependency_data is None:
@@ -386,7 +390,7 @@ def investigate(
     first_cluster_job_id = job_id  # Simplified, original script has more complex logic
     comment_id = sync_via_investigation_comment(job_id, first_cluster_job_id, settings)
     if comment_id is None:
-        return  # Already being investigated
+        raise typer.Exit(0)  # Already being investigated
 
     comment_output = ""
     try:
