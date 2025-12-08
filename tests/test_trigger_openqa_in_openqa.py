@@ -15,7 +15,7 @@ def test_trigger_openqa_in_openqa(mocker: MockerFixture) -> None:
         return_value="scenario-definitions.yaml",
     )
     mock_find_image = mocker.patch(
-        "os_autoinst_scripts.trigger_openqa_in_openqa.find_latest_published_tumbleweed_image",
+        "os_autoinst_scripts._common.find_latest_published_tumbleweed_image",
         return_value="some.qcow2",
     )
     mock_httpx_get = mocker.patch("httpx.get")
@@ -44,7 +44,7 @@ def test_trigger_openqa_in_openqa_full_run(mocker: MockerFixture) -> None:
         return_value="scenario-definitions.yaml",
     )
     mock_find_image = mocker.patch(
-        "os_autoinst_scripts.trigger_openqa_in_openqa.find_latest_published_tumbleweed_image",
+        "os_autoinst_scripts._common.find_latest_published_tumbleweed_image",
         return_value="some.qcow2",
     )
     mock_httpx_get = mocker.patch("httpx.get")
