@@ -1,4 +1,5 @@
 # Copyright SUSE LLC
+import httpx
 from unittest.mock import MagicMock
 
 from pytest_mock import MockerFixture
@@ -48,7 +49,7 @@ def test_wip_limit_exceeded(mocker: MockerFixture) -> None:
 
 def test_redmine_error(mocker: MockerFixture) -> None:
     mock_get = mocker.patch("httpx.get")
-    mock_get.side_effect = Exception("Something went wrong")
+    mock_get.side_effect = httpx.RequestError("Something went wrong", request=httpx.Request("GET", "http://example.com"))
 
     result = runner.invoke(app, ["--redmine-api-key", "dummy-key", "--wip-limit", "2"])
 
