@@ -6,7 +6,10 @@ from unittest.mock import MagicMock, call
 import pytest
 from pytest_mock import MockerFixture
 
+import httpx
+
 from os_autoinst_scripts._common import (
+    ErrorReturnCode,
     comment_on_job,
     delete_packages_from_obs_project,
     exp_retry,
@@ -48,7 +51,7 @@ def test_runcli_error(mocker: MockerFixture) -> None:
         returncode=1, cmd=["echo", "error"], stderr="some error"
     )
 
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(ErrorReturnCode):
         runcli(["echo", "error"])
 
 
@@ -77,7 +80,7 @@ def test_exp_retry() -> None:
 
 def test_shorten_string() -> None:
     assert shorten_string("a" * 100) == "a" * 100
-    assert shorten_string("a" * 150) == f"{'a' * 75}...{'a' * 75}"
+    assert shorten_string("a" * 150) == f"{'a' * 60}...{'a' * 60}"
 
 
 def test_runcurl_success(mocker: MockerFixture) -> None:
