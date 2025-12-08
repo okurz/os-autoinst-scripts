@@ -11,16 +11,16 @@ runner = CliRunner()
 
 
 def test_check_package_origin(mocker: MockerFixture) -> None:
-    mock_osc = mocker.patch("os_autoinst_scripts.obs_check_package_origin.osc")
-    mock_zypper = mocker.patch("os_autoinst_scripts.obs_check_package_origin.zypper")
-    mock_rpmspec = mocker.patch("os_autoinst_scripts.obs_check_package_origin.rpmspec")
-    mock_grep = mocker.patch("os_autoinst_scripts.obs_check_package_origin.grep")
-    mock_cut = mocker.patch("os_autoinst_scripts.obs_check_package_origin.cut")
-    mock_sort = mocker.patch("os_autoinst_scripts.obs_check_package_origin.sort")
-    mock_sed = mocker.patch("os_autoinst_scripts.obs_check_package_origin.sed")
-    mock_tr = mocker.patch("os_autoinst_scripts.obs_check_package_origin.tr")
-    mock_head = mocker.patch("os_autoinst_scripts.obs_check_package_origin.head")
-    mock_basename = mocker.patch("os_autoinst_scripts.obs_check_package_origin.basename")
+    mock_osc = mocker.patch("os_autoinst_scripts._common.osc")
+    mock_zypper = mocker.patch("os_autoinst_scripts._common.zypper")
+    mock_rpmspec = mocker.patch("os_autoinst_scripts._common.rpmspec")
+    mock_grep = mocker.patch("os_autoinst_scripts._common.grep")
+    mock_cut = mocker.patch("os_autoinst_scripts._common.cut")
+    mock_sort = mocker.patch("os_autoinst_scripts._common.sort")
+    mock_sed = mocker.patch("os_autoinst_scripts._common.sed")
+    mock_tr = mocker.patch("os_autoinst_scripts._common.tr")
+    mock_head = mocker.patch("os_autoinst_scripts._common.head")
+    mock_basename = mocker.patch("os_autoinst_scripts._common.basename")
 
     mock_osc.cat.return_value = "Version: 1.0"
     mock_rpmspec.return_value = MagicMock(stdout=b"1.0\n")
