@@ -65,7 +65,16 @@ from sh import (
     zypper as sh_zypper,
 )
 
-console = Console()
+console = Console(color_system=None)
+
+class ErrorReturnCode(Exception):
+    """Exception raised when a subprocess returns a non-zero exit code."""
+
+    def __init__(self, message: str, return_code: int, stdout: str, stderr: str):
+        super().__init__(message)
+        self.return_code = return_code
+        self.stdout = stdout
+        self.stderr = stderr
 
 # Expose sh commands as top-level functions
 basename = sh_basename
@@ -87,10 +96,7 @@ tr = sh_tr
 zypper = sh_zypper
 
 # Expose other functions
-from ._common_functions import (  # Assuming these are in a separate file or need to be defined here
-    delete_packages_from_obs_project,
-    list_packages,
-)
+
 
 OSC = "osc"  # Assuming osc is installed and in PATH
 OPENQA_CLI = "openqa-cli"  # Assuming openqa-cli is installed and in PATH
@@ -107,7 +113,7 @@ NO_COLOR = "[/]"
 
 
 def warn(message: str) -> None:
-    console.print(f"{COLOR_WARNING}{message}{NO_COLOR}", file=sys.stderr)
+    console.log(f"{COLOR_WARNING}{message}{NO_COLOR}")
 
 
 def log_info(message: str) -> None:
@@ -115,15 +121,15 @@ def log_info(message: str) -> None:
 
 
 def log_debug(message: str) -> None:
-    console.print(f"{COLOR_CYAN}{message}{NO_COLOR}", file=sys.stderr)
+    console.log(f"{COLOR_CYAN}{message}{NO_COLOR}")
 
 
 def log_warn(message: str) -> None:
-    console.print(f"{COLOR_WARNING}{message}{NO_COLOR}", file=sys.stderr)
+    console.log(f"{COLOR_WARNING}{message}{NO_COLOR}")
 
 
 def log_error(message: str) -> None:
-    console.print(f"{COLOR_ERROR}{message}{NO_COLOR}", file=sys.stderr)
+    console.log(f"{COLOR_ERROR}{message}{NO_COLOR}")
 
 
 def job_ids(job_post_response_content: str) -> List[str]:
@@ -146,7 +152,9 @@ def runcli(args: List[str], verbose: bool = False) -> str:
         warn(f"Command {' '.join(args)} failed with exit code {e.returncode}")
         warn(f"Stdout: {e.stdout}")
         warn(f"Stderr: {e.stderr}")
-        raise
+        raise ErrorReturnCode(
+            f"Command {' '.join(args)} failed", e.returncode, e.stdout, e.stderr
+        )
     except FileNotFoundError:
         warn(f"Command not found: {args[0]}")
         raise
@@ -288,3 +296,8 @@ def openqa_api_put(path: str, data: dict, host_url: str) -> dict:
     except Exception as e:
         warn(f"openqa-api-put: Error making API request ({path}): {e}")
         raise
+
+
+def find_latest_published_tumbleweed_image(group_id: int, arch: str, machine: str, image_type: str) -> str:
+    # This is a placeholder for the actual implementation
+    return "openSUSE-Tumbleweed-DVD-x86_64-Snapshot20240101-Media.iso"
