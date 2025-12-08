@@ -29,7 +29,7 @@ def test_set_due_date(mocker: MockerFixture) -> None:
         },
     )
 
-    result = runner.invoke(app, ["--redmine-api-key", "dummy-key"])
+    result = runner.invoke(app, ["main", "--redmine-api-key", "dummy-key", "--set-due-date", "2025-12-31"])
 
     assert result.exit_code == 0
     assert "Updating ticket 1" in result.stdout
@@ -54,7 +54,7 @@ def test_set_due_date_dry_run(mocker: MockerFixture) -> None:
         },
     )
 
-    result = runner.invoke(app, ["--redmine-api-key", "dummy-key", "--dry-run"])
+    result = runner.invoke(app, ["main", "--redmine-api-key", "dummy-key", "--dry-run", "--set-due-date", "2025-12-31"])
 
     assert result.exit_code == 0
     assert "Updating ticket 1" in result.stdout
