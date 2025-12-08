@@ -10,7 +10,7 @@ runner = CliRunner()
 
 
 def test_cleanup_obs_project_success(mocker: MockerFixture) -> None:
-    mock_osc = mocker.patch("os_autoinst_scripts.cleanup_obs_project.osc")
+    mock_osc = mocker.patch("os_autoinst_scripts._common.osc")
     mock_osc.ls.return_value = MagicMock(stdout=b"package1\npackage2\n")
 
     result = runner.invoke(app, ["my-project", "I am sure"])
@@ -24,7 +24,7 @@ def test_cleanup_obs_project_success(mocker: MockerFixture) -> None:
 
 
 def test_cleanup_obs_project_no_confirmation(mocker: MockerFixture) -> None:
-    mock_osc = mocker.patch("os_autoinst_scripts.cleanup_obs_project.osc")
+    mock_osc = mocker.patch("os_autoinst_scripts._common.osc")
 
     result = runner.invoke(app, ["my-project", "not sure"])
 
