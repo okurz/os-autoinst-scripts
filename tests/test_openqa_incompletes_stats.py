@@ -27,7 +27,7 @@ def test_incompletes_stats_show_ids(mocker: MockerFixture) -> None:
 
     assert result.exit_code == 0
     assert mock_ssh.call_count == 1
-    assert "array_agg(jobs.id)" in mock_ssh.call_args[1]
+    assert "array_agg(jobs.id)" in mock_ssh.call_args[0][2]
 
 
 def test_incompletes_stats_show_workers(mocker: MockerFixture) -> None:
@@ -38,4 +38,4 @@ def test_incompletes_stats_show_workers(mocker: MockerFixture) -> None:
 
     assert result.exit_code == 0
     assert mock_ssh.call_count == 1
-    assert "array(select distinct host from workers" in mock_ssh.call_args[1]
+    assert "array(select distinct host from workers" in mock_ssh.call_args[0][2]
