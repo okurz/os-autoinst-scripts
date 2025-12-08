@@ -11,7 +11,6 @@ import typer
 
 from os_autoinst_scripts._common import (
     ErrorReturnCode,
-    cleanup_obs_project,
     console,
     delete_packages_from_obs_project,
     find_latest_published_tumbleweed_image,
@@ -29,6 +28,21 @@ app = typer.Typer()
 import pathlib
 
 import typer
+
+# Global constants for default values
+TARGET_HOST = "openqa.opensuse.org"
+TARGET_HOST_PROTO = "https"
+TW_OPENQA_HOST = "https://openqa.opensuse.org"
+TW_GROUP_ID = "1"
+ARCH = "x86_64"
+MACHINE = "64bit"
+FLAVOR = "default"
+GROUP_ID = "1"
+SCENARIO_DEFINITIONS = "data/scenario_definitions.json"
+OPENQA_CLI_COMMAND = "openqa-cli"
+SRC_PROJECT = "devel:openQA:TEST"
+STAGING_PROJECT = "devel:openQA:staging"
+VERSION = "1"
 
 app = typer.Typer()
 
@@ -144,7 +158,7 @@ def main_app(
         rc = create_devel_openqa_snapshot(full_run, dry_run)
         if rc != 0:
             log_error("Snapshot creation failed, cleaning up staging project.")
-            cleanup_obs_project(STAGING_PROJECT, "I am sure")
+            delete_packages_from_obs_project(STAGING_PROJECT)
             raise typer.Exit(rc)
     else:
         # If full_run, staging_project is set to src_project in shell script
