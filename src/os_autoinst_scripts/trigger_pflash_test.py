@@ -7,14 +7,12 @@ import sys
 
 import typer
 
-from os_autoinst_scripts._common import ErrorReturnCode, console, openqa_cli
+from os_autoinst_scripts._common import ErrorReturnCode, console, openqa_cli, find_latest_published_tumbleweed_image
 
 app = typer.Typer()
 
 
-def find_latest_published_tumbleweed_image(group_id: int, arch: str, machine: str, image_type: str) -> str:
-    # This is a placeholder for the actual implementation
-    return "openSUSE-Tumbleweed-DVD-x86_64-Snapshot20240101-Media.iso"
+
 
 
 @app.command()
