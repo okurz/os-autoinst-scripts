@@ -10,17 +10,19 @@ runner = CliRunner()
 
 
 def test_cleanup_obs_project_success(mocker: MockerFixture) -> None:
-    mock_osc = mocker.patch("os_autoinst_scripts._common.osc")
-    mock_osc.ls.return_value = MagicMock(stdout=b"package1\npackage2\n")
+    def osc_side_effect(*args, **kwargs):
+        if args[0] == "ls":
+            return MagicMock(stdout=b"package1\npackage2\n")
+        return MagicMock()
+
+    mock_osc = mocker.patch("os_autoinst_scripts._common.osc", side_effect=osc_side_effect)
 
     result = runner.invoke(app, ["my-project", "I am sure"])
 
     assert result.exit_code == 0
-    mock_osc.ls.assert_called_once_with("my-project")
-    mock_osc.rdelete.assert_has_calls([
-        call("-m", "Cleaning up package1 from my-project", "my-project", "package1"),
-        call("-m", "Cleaning up package2 from my-project", "my-project", "package2"),
-    ])
+    mock_osc.assert_any_call("ls", "my-project")
+    mock_osc.assert_any_call("rdelete", "-m", "Cleaning up package1 from my-project", "my-project", "package1")
+    mock_osc.assert_any_call("rdelete", "-m", "Cleaning up package2 from my-project", "my-project", "package2")
 
 
 def test_cleanup_obs_project_no_confirmation(mocker: MockerFixture) -> None:
@@ -30,4 +32,4 @@ def test_cleanup_obs_project_no_confirmation(mocker: MockerFixture) -> None:
 
     assert result.exit_code == 2
     assert "Skipping, pass 'I am sure' as 2nd argument to confirm" in result.stdout
-    mock_osc.ls.assert_not_called()
+    mock_osc.assert_not_called()
