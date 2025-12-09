@@ -4,7 +4,6 @@ import json
 from pytest_mock import MockerFixture
 from typer.testing import CliRunner
 
-
 from os_autoinst_scripts.openqa_investigate import app
 
 runner = CliRunner()
@@ -33,7 +32,10 @@ def test_investigate_already_investigated(mocker: MockerFixture) -> None:
 
     assert result.exit_code == 0
     mock_run_openqa_cli.assert_called_once()
-    assert "Job 123 skipped because its name 'some_test:investigate' matches exclusion regex ':investigate:'" in result.stdout
+    assert (
+        "Job 123 skipped because its name 'some_test:investigate' matches exclusion regex ':investigate:'"
+        in result.stdout
+    )
 
 
 def test_investigate_clone_exists_no_force(mocker: MockerFixture) -> None:

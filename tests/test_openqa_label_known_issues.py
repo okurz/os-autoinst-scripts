@@ -1,5 +1,4 @@
 # Copyright SUSE LLC
-import json
 from unittest.mock import MagicMock
 
 from pytest_mock import MockerFixture

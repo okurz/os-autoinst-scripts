@@ -373,7 +373,9 @@ def investigate(
         raise typer.Exit(0)
 
     if re.search(settings.exclude_name_regex, old_name):
-        console.print(f"[yellow]Job {job_id} skipped because its name '{old_name}' matches exclusion regex '{settings.exclude_name_regex}'[/yellow]")
+        console.print(
+            f"[yellow]Job {job_id} skipped because its name '{old_name}' matches exclusion regex '{settings.exclude_name_regex}'[/yellow]"
+        )
         raise typer.Exit(0)
 
     clone_id = job_data["job"].get("clone_id")

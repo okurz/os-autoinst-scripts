@@ -3,10 +3,9 @@ import json
 import subprocess
 from unittest.mock import MagicMock, call
 
+import httpx
 import pytest
 from pytest_mock import MockerFixture
-
-import httpx
 
 from os_autoinst_scripts._common import (
     ErrorReturnCode,

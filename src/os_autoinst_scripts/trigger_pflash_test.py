@@ -7,12 +7,9 @@ import sys
 
 import typer
 
-from os_autoinst_scripts._common import ErrorReturnCode, console, openqa_cli, find_latest_published_tumbleweed_image
+from os_autoinst_scripts._common import ErrorReturnCode, console, find_latest_published_tumbleweed_image, openqa_cli
 
 app = typer.Typer()
-
-
-
 
 
 @app.command()

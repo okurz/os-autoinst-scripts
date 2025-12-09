@@ -4,7 +4,6 @@
 
 import json
 import subprocess
-import sys
 import time
 from typing import List, Optional
 
@@ -67,6 +66,7 @@ from sh import (
 
 console = Console(color_system=None)
 
+
 class ErrorReturnCode(Exception):
     """Exception raised when a subprocess returns a non-zero exit code."""
 
@@ -75,6 +75,7 @@ class ErrorReturnCode(Exception):
         self.return_code = return_code
         self.stdout = stdout
         self.stderr = stderr
+
 
 # Expose sh commands as top-level functions
 basename = sh_basename
@@ -152,9 +153,7 @@ def runcli(args: List[str], verbose: bool = False) -> str:
         warn(f"Command {' '.join(args)} failed with exit code {e.returncode}")
         warn(f"Stdout: {e.stdout}")
         warn(f"Stderr: {e.stderr}")
-        raise ErrorReturnCode(
-            f"Command {' '.join(args)} failed", e.returncode, e.stdout, e.stderr
-        )
+        raise ErrorReturnCode(f"Command {' '.join(args)} failed", e.returncode, e.stdout, e.stderr)
     except FileNotFoundError:
         warn(f"Command not found: {args[0]}")
         raise
