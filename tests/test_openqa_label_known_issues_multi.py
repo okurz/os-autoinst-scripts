@@ -1,5 +1,4 @@
 # Copyright SUSE LLC
-from unittest.mock import MagicMock
 
 from pytest_mock import MockerFixture
 from typer.testing import CliRunner
