@@ -17,6 +17,9 @@ dependencies = [
     "httpx",
     "typer[all]",
     "requests",
+    "sh",
+    "pynetbox",
+    "tenacity",
 ]
 
 [tool.setuptools]
