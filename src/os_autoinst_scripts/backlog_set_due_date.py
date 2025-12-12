@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script sets the due date on tickets in Redmine based on specified conditions.
-"""
+"""The script sets the due date on tickets in Redmine based on specified conditions."""
 import datetime
-from typing import List
+import pathlib
 
 import httpx
 import typer
@@ -26,12 +24,11 @@ def main(
     dry_run: bool = typer.Option(False, "--dry-run", help="Do not do any action on Redmine"),
     issues_file: str = typer.Option(None, help="Read issues from a file instead of Redmine"),
 ) -> None:
-    """
-    Set the due date on tickets in Redmine based on specified conditions.
+    """Set the due date on tickets in Redmine based on specified conditions.
     """
     headers = {"X-Redmine-API-Key": redmine_api_key}
     if issues_file and dry_run:
-        with open(issues_file, "r") as f:
+        with pathlib.Path(issues_file).open("r", encoding="utf-8") as f:
             issues = f.read()
     else:
         url = f"{host}/issues.json?query_id={query_id}&limit={ticket_limit}"
@@ -43,7 +40,7 @@ def main(
             console.print(f"[bold red]Error querying Redmine: {e}[/bold red]")
             raise typer.Exit(1)
 
-    due_date = (datetime.date.today() + datetime.timedelta(days=int(duration.split()[0]))).strftime("%Y-%m-%d")
+    due_date = (datetime.date.today() + datetime.timedelta(days=int(duration.split(maxsplit=1)[0]))).strftime("%Y-%m-%d")
 
     for issue in issues:
         if (
