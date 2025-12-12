@@ -18,7 +18,7 @@ def main() -> None:
     for line in sys.stdin:
         job_id = line.strip().split(" ")[0]
         try:
-            runcli(["openqa-investigate", job_id], check=True)
+            runcli(["openqa-investigate", job_id])
         except ErrorReturnCode as e:
             rc = e.returncode
 

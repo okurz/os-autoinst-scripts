@@ -25,7 +25,7 @@ def get_package_version(package: str) -> str:
     try:
         spec_file = f"{basename(package)}.spec"
         spec_content = osc_cmd.cat(package, spec_file)
-        version = rpmspec("-q", "--qf", "%{{version}}\n", _in=spec_content).stdout.decode().strip()
+        version = rpmspec("-q", "--qf", "%{{version}}\n", _in=spec_content).strip()
         return version.splitlines()[0]
     except ErrorReturnCode:
         return "-"
@@ -54,21 +54,21 @@ def get_package_name(req: str) -> str:
 def list_requirements(package: str) -> List[str]:
     try:
         spec_content = osc_cmd.cat("devel:openQA", package, f"_service:obs_scm:{package}.spec")
-        spec_content = sed("-e", "/node_modules.spec.inc/d", _in=spec_content).stdout.decode()
+        spec_content = sed("-e", "/node_modules.spec.inc/d", _in=spec_content)
         build_requires = rpmspec(
             "-q",
             "-D",
             "sysusers_requires BuildRequires: sysuser-tools",
             "--buildrequires",
             _in=spec_content,
-        ).stdout.decode()
+        )
         requires = rpmspec(
             "-q",
             "-D",
             "sysusers_requires BuildRequires: sysuser-tools",
             "--requires",
             _in=spec_content,
-        ).stdout.decode()
+        )
         reqs = sorted(list(set(build_requires.splitlines() + requires.splitlines())))
         packages = []
         for req in reqs:
@@ -82,7 +82,7 @@ def list_requirements(package: str) -> List[str]:
 
 def get_codestream(package: str) -> str:
     try:
-        return osc_cmd.sm(package, _err_to_out=True).stdout.decode().split(" ")[0]
+        return osc_cmd.sm(package, _err_to_out=True).stdout.decode().split(" ")[0].strip()
     except ErrorReturnCode:
         return ""
 
@@ -96,7 +96,7 @@ def find_source_package(package: str) -> str:
                 search_output = zypper(
                     "-n", "--no-refresh", "--xmlout", "se", "-t", "srcpackage", source_package
                 ).stdout.decode()
-                return grep("-oP", "'[^']+'", _in=search_output).stdout.decode().strip().replace("'", "")
+                return grep("-oP", "'[^']+'", _in=search_output).strip().replace("'", "")
     except (ErrorReturnCode, IndexError):
         pass
     return ""
@@ -105,7 +105,7 @@ def find_source_package(package: str) -> str:
 def search_provides(req: str) -> List[str]:
     try:
         provides_output = zypper("-n", "--no-refresh", "--xmlout", "se", "--provides", req).stdout.decode()
-        provides = grep("-oP", "'[^']+'", _in=provides_output).stdout.decode().strip().replace("'", "").splitlines()
+        provides = grep("-oP", "'[^']+'", _in=provides_output).strip().replace("'", "").splitlines()
         console.print(f"{req} is provided by {provides}")
         source_packages = []
         for prov in provides:

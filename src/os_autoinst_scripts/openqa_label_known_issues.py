@@ -2,6 +2,7 @@
 # Copyright SUSE LLC
 """The script labels known issues in openQA."""
 
+import json
 import re
 from typing import List, Optional
 

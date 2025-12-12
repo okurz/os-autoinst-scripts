@@ -29,10 +29,9 @@ def test_set_due_date(mocker: MockerFixture) -> None:
         },
     )
 
-    result = runner.invoke(app, ["main", "--redmine-api-key", "dummy-key", "--set-due-date", "2025-12-31"])
-
+    result = runner.invoke(app, ["main", "--redmine-api-key", "dummy-key", "--duration", "14 days"])
     assert result.exit_code == 0
-    assert "Updating ticket 1" in result.stdout
+    assert "Updating ticket 1, new due date setup to 2025-12-23" in result.stdout  # Assuming today is Dec 9, 2025 + 14 days = Dec 23, 2025
     mock_put.assert_called_once()
 
 
@@ -54,10 +53,9 @@ def test_set_due_date_dry_run(mocker: MockerFixture) -> None:
         },
     )
 
-    result = runner.invoke(app, ["main", "--redmine-api-key", "dummy-key", "--dry-run", "--set-due-date", "2025-12-31"])
-
+    result = runner.invoke(app, ["main", "--redmine-api-key", "dummy-key", "--dry-run", "--duration", "14 days"])
     assert result.exit_code == 0
-    assert "Updating ticket 1" in result.stdout
+    assert "Updating ticket 1, new due date setup to 2025-12-23" in result.stdout  # Assuming today is Dec 9, 2025 + 14 days = Dec 23, 2025
     mock_put.assert_not_called()
 
 
@@ -81,7 +79,6 @@ def test_set_due_date_from_file(mocker: MockerFixture) -> None:
         app,
         ["main", "--redmine-api-key", "dummy-key", "--dry-run", "--issues-file", "test.json"],
     )
-
     assert result.exit_code == 0
-    assert "Updating ticket 1" in result.stdout
+    assert "Updating ticket 1, new due date setup to 2025-12-23" in result.stdout  # Assuming today is Dec 9, 2025 + 14 days = Dec 23, 2025
     mock_put.assert_not_called()

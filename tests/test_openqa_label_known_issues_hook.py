@@ -1,5 +1,7 @@
 # Copyright SUSE LLC
 
+from unittest.mock import MagicMock
+
 from pytest_mock import MockerFixture
 from typer.testing import CliRunner
 
@@ -10,6 +12,7 @@ runner = CliRunner()
 
 def test_label_known_issues_hook(mocker: MockerFixture) -> None:
     mock_run = mocker.patch("subprocess.run")
+    mock_run.return_value = MagicMock(stdout=b"", stderr=b"", returncode=0)
 
     result = runner.invoke(app, ["12345"])
 
@@ -17,6 +20,7 @@ def test_label_known_issues_hook(mocker: MockerFixture) -> None:
     mock_run.assert_called_once_with(
         ["openqa-label-known-issues-multi"],
         input="https://openqa.opensuse.org/tests/12345",
+        capture_output=True,
         text=True,
         check=True,
     )
