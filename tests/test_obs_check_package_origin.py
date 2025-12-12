@@ -35,7 +35,7 @@ def test_check_package_origin(mocker: MockerFixture) -> None:
     mock_head.return_value = MagicMock(stdout=b"package")
     mock_basename.return_value = MagicMock(stdout=b"package")
 
-    with pathlib.Path("test.spec").open("w") as f:
+    with pathlib.Path("test.spec").open("w", encoding="utf-8") as f:
         f.write("BuildRequires: some-package")
 
     result = runner.invoke(app, ["some-package"])
