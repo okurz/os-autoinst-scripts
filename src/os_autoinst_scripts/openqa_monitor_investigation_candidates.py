@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
+"""The script queries the openQA database for jobs that are candidates for investigation.
 """
-The script queries the openQA database for jobs that are candidates for investigation.
-"""
-import os
 import typer
 from rich.console import Console
 from sh import ssh
@@ -34,8 +32,7 @@ def main(
     ),
     additional_query: str = typer.Option("", help="Optional additional query"),
 ) -> None:
-    """
-    Query the openQA database for jobs that are candidates for investigation.
+    """Query the openQA database for jobs that are candidates for investigation.
     """
     if not ssh_host:
         ssh_host = host
