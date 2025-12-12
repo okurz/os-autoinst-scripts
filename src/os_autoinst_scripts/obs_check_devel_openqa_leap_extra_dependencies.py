@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
+"""The script checks for a "Reason for linking:" comment in OBS packages.
 """
-The script checks for a "Reason for linking:" comment in OBS packages.
-"""
-from typing import List
 
 import typer
 from rich.console import Console
@@ -15,8 +13,7 @@ console = Console()
 
 @app.command()
 def main() -> None:
-    """
-    Check for a "Reason for linking:" comment in OBS packages.
+    """Check for a "Reason for linking:" comment in OBS packages.
     """
     osc_cmd = osc.bake("--apiurl", "https://api.opensuse.org")
     problem = False
