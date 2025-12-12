@@ -1,4 +1,5 @@
 # Copyright SUSE LLC
+import pathlib
 from unittest.mock import MagicMock
 
 from pytest_mock import MockerFixture
@@ -18,7 +19,7 @@ def test_testapi_usage(mocker: MockerFixture) -> None:
     mock_sort.return_value = MagicMock(stdout=b"assert_screen\n")
     mock_rg.return_value = MagicMock(stderr=b"1 match\n")
 
-    with open("testapi.pm", "w") as f:
+    with pathlib.Path("testapi.pm").open("w", encoding="utf-8") as f:
         f.write("package testapi;\nsub assert_screen { }")
 
     result = runner.invoke(app, ["testapi.pm", "some/repo"])
@@ -28,6 +29,6 @@ def test_testapi_usage(mocker: MockerFixture) -> None:
     mock_rg.assert_called_once_with(
         "--engine", "pcre2", "--stats", "(?<!_)assert_screen", "some/repo"
     )
-    mock_grep.assert_any_call("^sub \w+\s*[({:]", "testapi.pm")
+    mock_grep.assert_any_call(r"^sub \w+\s*[({:]", "testapi.pm")
     mock_cut.assert_called_once_with("-f2", "-d", " ")
     mock_sort.assert_called_once()
