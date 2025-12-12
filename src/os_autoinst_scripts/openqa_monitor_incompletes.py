@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script queries the openQA database for incomplete jobs and prints their URL and details.
+"""The script queries the openQA database for incomplete jobs and prints their URL and details.
 """
 import typer
 from rich.console import Console
@@ -18,8 +17,7 @@ def main(
     scheme: str = typer.Option("https", help="Scheme to use for the query"),
     interval: str = typer.Option("24 hour", help="Interval to search in"),
 ) -> None:
-    """
-    Query the openQA database for incomplete jobs and print their URL and details.
+    """Query the openQA database for incomplete jobs and print their URL and details.
     """
     if not ssh_host:
         ssh_host = host
