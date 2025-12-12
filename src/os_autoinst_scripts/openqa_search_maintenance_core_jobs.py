@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
+"""The script searches for jobs in openQA related to a maintenance update.
 """
-The script searches for jobs in openQA related to a maintenance update.
-"""
-from typing import List
 
 import httpx
 import typer
@@ -207,8 +205,7 @@ def main_app(
     review_request_id: str = typer.Argument(..., help="SUSE:Maintenance:II:RR"),
     days: int = typer.Option(5, help="Days to search for aggregated updates"),
 ) -> None:
-    """
-    Search for jobs in openQA related to a maintenance update.
+    """Search for jobs in openQA related to a maintenance update.
     """
     search_maintenance_single_incidents(review_request_id)
     search_maintenance_aggregated(review_request_id, days)
