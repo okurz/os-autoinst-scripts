@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-The script takes a list of openQA test URLs from standard input and calls
+"""The script takes a list of openQA test URLs from standard input and calls
 label_issue for each of them.
 """
 import sys
@@ -18,8 +17,7 @@ console = Console()
 
 @app.command()
 def main() -> None:
-    """
-    Take a list of openQA test URLs from standard input and call
+    """Take a list of openQA test URLs from standard input and call
     label_issue for each of them.
     """
     to_review: List[str] = []
