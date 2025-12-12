@@ -31,7 +31,8 @@ def test_hook_passed_job(mocker: MockerFixture) -> None:
 
 def test_hook_failed_job_bats_review(mocker: MockerFixture) -> None:
     mock_httpx_get = mocker.patch("httpx.get")
-    mock_subprocess_run = mocker.patch("subprocess.run")
+    mock_runcli = mocker.patch("os_autoinst_scripts.openqa_label_known_issues_and_investigate_hook.runcli")  # Patch runcli here
+    mock_runcli.return_value = ""  # runcli returns string
     mock_label = mocker.patch("os_autoinst_scripts.openqa_label_known_issues_and_investigate_hook.label")
     mock_investigate_and_bisect = mocker.patch(
         "os_autoinst_scripts.openqa_label_known_issues_and_investigate_hook.investigate_and_bisect"
@@ -52,7 +53,7 @@ def test_hook_failed_job_bats_review(mocker: MockerFixture) -> None:
 
     assert result.exit_code == 0
     mock_httpx_get.assert_called_once()
-    mock_subprocess_run.assert_called_once_with(
+    mock_runcli.assert_called_once_with(  # Assert against runcli
         ["openqa-bats-review", "https://openqa.opensuse.org/tests/123"], check=True
     )
     mock_label.assert_not_called()

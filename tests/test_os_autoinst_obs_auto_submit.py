@@ -27,7 +27,7 @@ def test_obs_auto_submit_success(mocker: MockerFixture) -> None:
     )
     mocker.patch("os_autoinst_scripts.os_autoinst_obs_auto_submit.log_info")  # Mock log_info
 
-    result = runner.invoke(app, ["main-app"])
+    result = runner.invoke(app, ["main_app", "my-project"])
 
     assert result.exit_code == 0
 
@@ -51,7 +51,7 @@ def test_obs_auto_submit_failed_package(mocker: MockerFixture) -> None:
     )
     mock_log_warn = mocker.patch("os_autoinst_scripts.os_autoinst_obs_auto_submit.log_warn")
 
-    result = runner.invoke(app, ["main-app"])
+    result = runner.invoke(app, ["main_app", "my-project"])
 
     assert result.exit_code == 1
     mock_log_warn.assert_called_with("- test-package-1")

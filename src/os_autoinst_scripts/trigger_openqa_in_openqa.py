@@ -179,7 +179,7 @@ def main_app(
             f"{target_host_proto}://{target_host}",
             "--param-file",
             f"SCENARIO_DEFINITIONS_YAML={scenario_file_path}",
-            f"VERSION={version}",
+            "VERSION=1",
             "DISTRI=openqa",
             f"FLAVOR={flavor}",
             f"ARCH={arch}",

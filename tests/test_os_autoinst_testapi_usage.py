@@ -11,13 +11,13 @@ runner = CliRunner()
 
 
 def test_testapi_usage(mocker: MockerFixture) -> None:
-    mock_rg = mocker.patch("os_autoinst_scripts._common.rg")
-    mock_grep = mocker.patch("os_autoinst_scripts._common.grep")
-    mock_cut = mocker.patch("os_autoinst_scripts._common.cut")
-    mock_sort = mocker.patch("os_autoinst_scripts._common.sort")
+    mock_grep_testapi = mocker.patch("os_autoinst_scripts.os_autoinst_testapi_usage.grep")
+    mock_cut_testapi = mocker.patch("os_autoinst_scripts.os_autoinst_testapi_usage.cut")
+    mock_sort_testapi = mocker.patch("os_autoinst_scripts.os_autoinst_testapi_usage.sort")
 
-    mock_sort.return_value = MagicMock(stdout=b"assert_screen\n")
-    mock_rg.return_value = MagicMock(stderr=b"1 match\n")
+    mock_sort_testapi.return_value = MagicMock(stdout=b"assert_screen\n")
+    mock_grep_testapi.return_value = MagicMock(stdout=b"sub assert_screen { }\n")
+    mock_cut_testapi.return_value = MagicMock(stdout=b"assert_screen\n")
 
     with pathlib.Path("testapi.pm").open("w", encoding="utf-8") as f:
         f.write("package testapi;\nsub assert_screen { }")

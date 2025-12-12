@@ -10,7 +10,7 @@ runner = CliRunner()
 
 def test_trigger_pflash_test(mocker: MockerFixture) -> None:
     mock_openqa_cli = mocker.patch("os_autoinst_scripts._common.openqa_cli")
-    mock_find_image = mocker.patch("os_autoinst_scripts._common.find_latest_published_tumbleweed_image")
+    mock_find_image = mocker.patch("os_autoinst_scripts.trigger_pflash_test.find_latest_published_tumbleweed_image")
     mock_find_image.return_value = "some.iso"
 
     result = runner.invoke(app, ["--openqa-api-key", "dummy-key", "--openqa-api-secret", "dummy-secret"])
@@ -22,7 +22,7 @@ def test_trigger_pflash_test(mocker: MockerFixture) -> None:
 
 def test_trigger_pflash_test_dry_run(mocker: MockerFixture) -> None:
     mock_openqa_cli = mocker.patch("os_autoinst_scripts._common.openqa_cli")
-    mock_find_image = mocker.patch("os_autoinst_scripts._common.find_latest_published_tumbleweed_image")
+    mock_find_image = mocker.patch("os_autoinst_scripts.trigger_pflash_test.find_latest_published_tumbleweed_image")
     mock_find_image.return_value = "some.iso"
 
     result = runner.invoke(

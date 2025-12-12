@@ -5,9 +5,11 @@ parameter and forwarding a complete job URL to "openqa-label-known-issues-multi"
 on stdin
 """
 
+import subprocess
+
 import typer
 
-from os_autoinst_scripts._common import ErrorReturnCode, console, runcli
+from os_autoinst_scripts._common import console
 
 app = typer.Typer()
 
@@ -22,14 +24,15 @@ def main(
     host_url = f"{scheme}://{host}"
     url = f"{host_url}/tests/{job_id}"
     try:
-        runcli(
+        subprocess.run(
             ["openqa-label-known-issues-multi"],
             input=url,
+            capture_output=True,
             text=True,
             check=True,
         )
-    except ErrorReturnCode as e:
-        console.print(f"[bold red]Error calling openqa-label-known-issues-multi: {e}[/bold red]")
+    except subprocess.CalledProcessError as e:
+        console.print(f"[bold red]Error calling openqa-label-known-issues-multi: {e.stderr}[/bold red]")
         raise typer.Exit(1)
 
 
