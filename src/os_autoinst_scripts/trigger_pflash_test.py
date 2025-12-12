@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-"""
-Trigger test to generate pflash vars image
+"""Trigger test to generate pflash vars image
 """
 import os
 from typing import List
@@ -34,8 +33,7 @@ def main(
     openqa_api_key: str = typer.Option(..., envvar="OPENQA_API_KEY", help="openQA API key"),
     openqa_api_secret: str = typer.Option(..., envvar="OPENQA_API_SECRET", help="openQA API secret"),
 ) -> None:
-    """
-    Trigger test to generate pflash vars image.
+    """Trigger test to generate pflash vars image.
     """
     image = find_latest_published_tumbleweed_image(tw_group_id, arch, machine, "iso")
 
