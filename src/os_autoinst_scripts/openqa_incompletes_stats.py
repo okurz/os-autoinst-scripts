@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
+"""The script queries the openQA database for statistics about incomplete jobs.
 """
-The script queries the openQA database for statistics about incomplete jobs.
-"""
-from typing import List
 
 import typer
 from rich.console import Console
@@ -25,8 +23,7 @@ def main(
         False, "--show-worker-hosts", help="Show worker hosts"
     ),
 ) -> None:
-    """
-    Query the openQA database for statistics about incomplete jobs.
+    """Query the openQA database for statistics about incomplete jobs.
     """
     if not ssh_host:
         ssh_host = host
