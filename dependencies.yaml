@@ -49,6 +49,7 @@ test_requires:
   perl(Test::Warnings):
   perl(Test::MockModule):
   perl(Test::Most):
+  python3-pyright:
   python3-pytest:
   python3-pytest-mock:
   python3-radon:
