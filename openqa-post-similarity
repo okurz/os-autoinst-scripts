@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
 # ruff: noqa: ANN001, ANN201, C901, D100, D103, FURB101, N806, PLR0912, PLR2004, PLW0602, PLW0603, PTH208, SIM115
+"""Scans autoinst-log.txt files for error messages and computes similarity.
+
+This script scans all autoinst-log.txt files in the testresults directory searching
+for error messages. Then it computes the Levenshtein distance and posts the
+results as openQA comments.
+"""
 
 import argparse
 import json
@@ -17,22 +23,12 @@ from pyecharts import options as opts
 from pyecharts.charts import Graph
 from tqdm import tqdm
 
-"""
-This script scans all autoinst-log.txt files in the testresults directory searching
-for error messages. Then it computes the Levenshtein distance and posts the
-results as openQA comments.
-"""
-
 id_msg = {}
 result = {}
 
 
-# I used a JSON file to store some intermediate computation results to reduce time cost.
-# This part finds error messages in autoinst-log.txt
-# Maybe there are multiple errors in a single autoinst-log.txt
-# I think some different code may trigger the same bug.
-# The first line is the most important, so I focus on the first lines of the errors.
 def init_logging():
+    """Initialize logging."""
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -40,6 +36,7 @@ def init_logging():
 
 
 def read_errors(path) -> None:
+    """Read error messages from autoinst-log.txt."""
     global id_msg
     with pathlib.Path(path).open(encoding="utf-8") as f:
         text = f.read()
@@ -53,6 +50,7 @@ def read_errors(path) -> None:
 
 
 def read_id_msg(logger, testdir) -> None:
+    """Read error messages from all autoinst-log.txt in testdir."""
     global id_msg
     if not pathlib.Path("id_msg.json").exists():
         logger.info("id_msg.json does not exist.")
@@ -80,9 +78,8 @@ def read_id_msg(logger, testdir) -> None:
         pathlib.Path("id_msg.json").write_text(id_msg_json, encoding="utf-8")
 
 
-# Compute the Levenshtein result and save it.
-# Saving the result in a file may be unnecessary.
 def cal_distance(logger, output, number) -> None:
+    """Compute Levenshtein distance between error messages."""
     global result
     if output:
         f = pathlib.Path("distance_result.txt").open("w", encoding="utf-8")
@@ -113,8 +110,8 @@ def cal_distance(logger, output, number) -> None:
         f.close()
 
 
-# Post the results in comments by OpenQA_Client
 def post(server, number) -> None:
+    """Post results as openQA comments."""
     client = OpenQA_Client(server)
     for origin, matched in tqdm(result.items(), desc="Posting comments", unit="comment"):
         data = {"bugrefs": []}
@@ -126,6 +123,7 @@ def post(server, number) -> None:
 
 
 def dict_slice(adict, s, e):
+    """Return a slice of a dictionary."""
     keys = adict.keys()
     d_slice = {}
     for k in list(keys)[s:e]:
@@ -134,8 +132,10 @@ def dict_slice(adict, s, e):
 
 
 def draw(logger, points, geometry, save_path) -> None:
+    """Draw a graph of error message similarities."""
     resolution = geometry.split("x")
-    if len(resolution) != 2:
+    expected_resolution_parts = 2
+    if len(resolution) != expected_resolution_parts:
         logger.warning("Wrong geometry format")
         return
     for item in resolution:
@@ -145,33 +145,30 @@ def draw(logger, points, geometry, save_path) -> None:
 
     msg_number = {}
     for msg in id_msg.values():
-        if msg in msg_number:
-            msg_number[msg] += 1
-        else:
-            msg_number[msg] = 1
+        msg_number[msg] = msg_number.get(msg, 0) + 1
     cut = dict_slice(msg_number, 0, points)
 
-    nodes_data = []
-    for msg, freq in cut.items():
-        nodes_data.append(opts.GraphNode(name=msg, symbol_size=freq))
+    nodes_data = [opts.GraphNode(name=msg, symbol_size=freq) for msg, freq in cut.items()]
 
     links_data = []
-    max_distance = 0
-    min_distance = float("inf")
+    max_dist = 0
+    min_dist = float("inf")
     for key1 in cut:
         for key2 in cut:
             if key1 == key2:
                 continue
-            L = Levenshtein.distance(key1, key2)
-            max_distance = max(max_distance, L)
-            min_distance = min(min_distance, L)
+            dist = Levenshtein.distance(key1, key2)
+            max_dist = max(max_dist, dist)
+            min_dist = min(min_dist, dist)
+
+    threshold = (max_dist + min_dist) / 2
     for key1 in cut:
         for key2 in cut:
             if key1 == key2:
                 continue
-            L = Levenshtein.distance(key1, key2)
-            if (max_distance + min_distance) / 2 > L:
-                links_data.append(opts.GraphLink(source=key1, target=key2, value=Levenshtein.distance(key1, key2)))
+            dist = Levenshtein.distance(key1, key2)
+            if threshold > dist:
+                links_data.append(opts.GraphLink(source=key1, target=key2, value=dist))
     (
         Graph(init_opts=opts.InitOpts(height=resolution[0] + "px", width=resolution[1] + "px"))
         .add(
