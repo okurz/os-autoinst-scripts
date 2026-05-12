@@ -1,14 +1,24 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
+<<<<<<< HEAD
 # ruff: noqa: ANN401, BLE001, C901, D103, E501, FA102, FBT001, FURB118, PLR0913, PLR0914, PLR0915, PLR0917, PLR2004, S404, S603, T201, TRY400
+||||||| parent of d1f4df67 (fix(openqa-llm-investigate): refactor with dataclasses and improved observability)
+# ruff: noqa: BLE001, E501, S404, S603, T201, TRY300, TRY400
+=======
+# ruff: noqa: BLE001, E501, S404, S603, T201, TRY400
+>>>>>>> d1f4df67 (fix(openqa-llm-investigate): refactor with dataclasses and improved observability)
 """Investigates an openQA job failure using an LLM."""
+
+from __future__ import annotations
 
 import json
 import logging
+import operator
 import os
 import subprocess
 import sys
 from collections import deque
+from dataclasses import dataclass
 from typing import Annotated, Any
 from urllib.parse import urlparse, urlunparse
 
@@ -17,12 +27,62 @@ import typer
 
 USER_AGENT = "openqa-llm-investigate (https://github.com/os-autoinst/os-autoinst-scripts)"
 
+MAX_BUILD_FAILURES_HINT = 20
+DEBUG_VERBOSITY_LEVEL = 2
+INFO_VERBOSITY_LEVEL = 1
+
 log = logging.getLogger(__name__)
 
 app = typer.Typer(add_completion=False)
 
 
-def fetch_json(client: httpx.Client, url: str, params: dict[str, Any] | None = None, default: Any = None) -> Any:
+@dataclass(frozen=True)
+class JobSettings:
+    """openQA job settings for history matching."""
+
+    build: str
+    distri: str
+    version: str
+    arch: str
+    flavor: str
+
+
+@dataclass(frozen=True)
+class InvestigationConfig:
+    """Configuration for LLM investigation."""
+
+    force: bool
+    dry: bool
+    llm_url: str
+    llm_model: str
+    timeout: int
+
+
+@dataclass(frozen=True)
+class JobIdentity:
+    """Identity of an openQA job."""
+
+    client: httpx.Client
+    base_url: str
+    job_id: str
+
+
+@dataclass(frozen=True)
+class InvestigationContext:
+    """Context for LLM investigation."""
+
+    identity: JobIdentity
+    job: dict[str, Any]
+    settings: JobSettings
+    config: InvestigationConfig
+    failed_modules: list[str]
+    build_failures: int
+    same_module_failures: int
+    consecutive_failures: int
+
+
+def fetch_json(client: httpx.Client, url: str, params: dict[str, Any] | None = None, default: Any = None) -> Any:  # noqa: ANN401
+    """Fetch JSON from URL."""
     try:
         response = client.get(url, params=params)
         response.raise_for_status()
@@ -33,6 +93,7 @@ def fetch_json(client: httpx.Client, url: str, params: dict[str, Any] | None = N
 
 
 def fetch_text(client: httpx.Client, url: str, max_lines: int = 200) -> str:
+    """Fetch text from URL, limiting to max_lines."""
     try:
         lines: deque[str] = deque(maxlen=max_lines)
         with client.stream("GET", url) as response:
@@ -46,6 +107,7 @@ def fetch_text(client: httpx.Client, url: str, max_lines: int = 200) -> str:
 
 
 def post_comment(base_url: str, job_id: str, comment: str) -> None:
+    """Post a comment to an openQA job."""
     cmd = [
         "openqa-cli",
         "api",
@@ -65,12 +127,13 @@ def post_comment(base_url: str, job_id: str, comment: str) -> None:
         log.error("Failed to post comment: %s", e.stderr)
 
 
-def setup_logging(verbose: int, quiet: bool) -> None:
+def setup_logging(verbose: int, quiet: bool) -> None:  # noqa: FBT001
+    """Set up logging based on verbosity and quiet flags."""
     if quiet:
         level = logging.ERROR
-    elif verbose >= 2:
+    elif verbose >= DEBUG_VERBOSITY_LEVEL:
         level = logging.DEBUG
-    elif verbose >= 1:
+    elif verbose >= INFO_VERBOSITY_LEVEL:
         level = logging.INFO
     else:
         level = logging.WARNING
@@ -78,6 +141,7 @@ def setup_logging(verbose: int, quiet: bool) -> None:
 
 
 def parse_job_url(job_url: str) -> tuple[str, str]:
+    """Parse openQA job URL or ID into base URL and job ID."""
     parsed_url = urlparse(job_url)
     if parsed_url.scheme:
         base_url = urlunparse((parsed_url.scheme, parsed_url.netloc, "", "", "", ""))
@@ -94,75 +158,37 @@ def _shares_failed_modules(other_job: dict[str, Any], target_modules: set[str]) 
     return bool(target_modules.intersection(other_failed))
 
 
-def _perform_investigation(
-    client: httpx.Client,
-    base_url: str,
-    job_id: str,
-    force: bool,
-    dry: bool,
-    llm_url: str,
-    llm_model: str,
-    timeout: int,
-) -> None:
-    # Check for existing LLM investigation comments
-    comments = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}/comments", default=[])
-    if not force and any(c.get("text", "").startswith("**LLM Investigation summary:**") for c in comments):
-        log.info("Job %s already has an LLM investigation summary, skipping.", job_id)
-        sys.exit(0)
-
-    # Fetch job details
-    job_data = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}/details")
-    if not job_data or "job" not in job_data:
-        # Fallback for openQA versions/configurations where /details might fail
-        job_data = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}")
-    if not job_data or "job" not in job_data:
-        log.error("Could not retrieve job data for job %s from %s", job_id, base_url)
-        sys.exit(1)
-    job = job_data["job"]
-
-    if not force and job.get("result") in {"passed", "softfailed"}:
-        log.info("Job %s %s, skipping investigation.", job_id, job.get("result"))
-        sys.exit(0)
-
-    failed_modules = [m.get("name", "unknown") for m in job.get("testresults", []) if m.get("result") == "failed"]
-
-    log_text = fetch_text(client, f"{base_url}/tests/{job_id}/file/autoinst-log.txt")
-    investigation = fetch_json(client, f"{base_url}/tests/{job_id}/investigation_ajax")
-
-    test_name = job.get("test", "unknown")
-    settings = job.get("settings", {})
-    build, distri, version, arch, flavor = (
-        settings.get(k, "unknown") for k in ("BUILD", "DISTRI", "VERSION", "ARCH", "FLAVOR")
-    )
-
-    # Search for similar failures in same build (across all tests)
-    build_params = {"build": build, "distri": distri, "version": version, "result": "failed"}
-    build_history_data = fetch_json(client, f"{base_url}/api/v1/jobs", params=build_params)
+def _get_history_stats(
+    identity: JobIdentity,
+    job: dict[str, Any],
+    settings: JobSettings,
+    failed_modules: list[str],
+) -> tuple[int, int, int]:
+    """Fetch history statistics (build failures, similar failures, consecutive failures)."""
     build_failed_jobs = build_history_data.get("jobs", [])
     build_failures = len(build_failed_jobs)
 
     failed_modules_set = set(failed_modules)
 
     def is_similar(j: dict[str, Any]) -> bool:
-        return str(j.get("id")) != str(job_id) and _shares_failed_modules(j, failed_modules_set)
+        return str(j.get("id")) != str(identity.job_id) and _shares_failed_modules(j, failed_modules_set)
 
     same_module_failures = sum(1 for j in build_failed_jobs if is_similar(j)) if failed_modules else 0
 
-    # Search for consecutive failures of the same test (across all builds)
+    # Search for consecutive failures of the same test
     test_params = {
-        "test": test_name,
-        "distri": distri,
-        "version": version,
-        "arch": arch,
-        "flavor": flavor,
+        "test": job.get("test", "unknown"),
+        "distri": settings.distri,
+        "version": settings.version,
+        "arch": settings.arch,
+        "flavor": settings.flavor,
         "limit": 100,
     }
-    test_history_data = fetch_json(client, f"{base_url}/api/v1/jobs", params=test_params)
-    test_jobs = sorted(test_history_data.get("jobs", []), key=lambda x: x["id"], reverse=True)
+    test_history_data = fetch_json(identity.client, f"{identity.base_url}/api/v1/jobs", params=test_params)
+    test_jobs = sorted(test_history_data.get("jobs", []), key=operator.itemgetter("id"), reverse=True)
 
-    target_id_int = int(job_id)
+    target_id_int = int(identity.job_id)
     valid_results = {"passed", "softfailed", "failed"}
-    found_target = any(j["id"] == target_id_int for j in test_jobs)
     relevant_jobs = [
         j
         for j in test_jobs
@@ -172,31 +198,40 @@ def _perform_investigation(
         (i for i, j in enumerate(relevant_jobs) if j.get("result") != "failed"), len(relevant_jobs)
     )
 
-    if not found_target:
+    if not any(j["id"] == target_id_int for j in test_jobs):
         log.warning(
             "Job %s not found in recent history (limit %s). Streak count may be inaccurate.",
-            job_id,
+            identity.job_id,
             test_params["limit"],
         )
 
-    hint = ""
-    if build_failures > 20:
-        hint = f"\n(Note: {build_failures} failures across this build strongly implies a backend infrastructure outage or a widespread environment issue rather than a specific product bug.)"
+    return build_failures, same_module_failures, consecutive_failures
 
-    prompt = f"""You are analyzing an openQA test run failure.
+
+def _build_prompt(
+    ctx: InvestigationContext,
+    investigation: dict[str, Any],
+    log_text: str,
+) -> str:
+    """Build the LLM prompt."""
+    hint = ""
+    if ctx.build_failures > MAX_BUILD_FAILURES_HINT:
+        hint = f"\n(Note: {ctx.build_failures} failures across this build strongly implies a backend infrastructure outage or a widespread environment issue rather than a specific product bug.)"
+
+    return f"""You are analyzing an openQA test run failure.
 Job details:
-- Test: {test_name}
-- Failed module(s): {", ".join(failed_modules) if failed_modules else "unknown"}
-- Group: {job.get("group", "unknown")}
-- Build: {build}
-- Distri: {distri}
-- Version: {version}
-- Arch: {arch}
-- Flavor: {flavor}
-- Result: {job.get("result", "unknown")}
-- Total failed jobs in this build (across all tests): {build_failures}{hint}
-- Other jobs in this build failing in the exact same module(s): {same_module_failures}
-- Consecutive recent failures for this specific test (same name, arch, flavor): {consecutive_failures}
+- Test: {ctx.job.get("test", "unknown")}
+- Failed module(s): {", ".join(ctx.failed_modules) if ctx.failed_modules else "unknown"}
+- Group: {ctx.job.get("group", "unknown")}
+- Build: {ctx.settings.build}
+- Distri: {ctx.settings.distri}
+- Version: {ctx.settings.version}
+- Arch: {ctx.settings.arch}
+- Flavor: {ctx.settings.flavor}
+- Result: {ctx.job.get("result", "unknown")}
+- Total failed jobs in this build (across all tests): {ctx.build_failures}{hint}
+- Other jobs in this build failing in the exact same module(s): {ctx.same_module_failures}
+- Consecutive recent failures for this specific test (same name, arch, flavor): {ctx.consecutive_failures}
 
 Investigation info (diff to last good):
 {json.dumps(investigation.get("diff_to_last_good", "None available"))}
@@ -212,21 +247,71 @@ Provide exactly 3 sentences answering:
    - If the failure is isolated to ONLY this job in the current build, AND the log contains an explicit product error or test assertion failure (e.g., 'actual size fits X: fail', 'command not found', 'segmentation fault'), it strongly points to a new regression. In this isolated case, you MUST answer BISECT: YES.
 """
 
-    req = {
-        "model": llm_model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3,
-    }
+
+def _get_job_data(identity: JobIdentity) -> dict[str, Any]:
+    """Fetch and validate job data."""
+    job_data = fetch_json(identity.client, f"{identity.base_url}/api/v1/jobs/{identity.job_id}/details")
+    if not job_data or "job" not in job_data:
+        # Fallback for openQA versions/configurations where /details might fail
+        job_data = fetch_json(identity.client, f"{identity.base_url}/api/v1/jobs/{identity.job_id}")
+    if not job_data or "job" not in job_data:
+        log.error("Could not retrieve job data for job %s from %s", identity.job_id, identity.base_url)
+        sys.exit(1)
+    return job_data["job"]
+
+
+def _perform_investigation(
+    identity: JobIdentity,
+    config: InvestigationConfig,
+) -> None:
+    """Perform LLM investigation for the given job."""
+    # Check for existing LLM investigation comments
+    comments = fetch_json(identity.client, f"{identity.base_url}/api/v1/jobs/{identity.job_id}/comments", default=[])
+    if not config.force and any(c.get("text", "").startswith("**LLM Investigation summary:**") for c in comments):
+        log.info("Job %s already has an LLM investigation summary, skipping.", identity.job_id)
+        sys.exit(0)
+
+    job = _get_job_data(identity)
+    if job.get("result") in {"passed", "softfailed"}:
+        log.info("Job %s %s, skipping investigation.", identity.job_id, job.get("result"))
+        sys.exit(0)
+
+    failed_modules = [m.get("name", "unknown") for m in job.get("testresults", []) if m.get("result") == "failed"]
+    log_text = fetch_text(identity.client, f"{identity.base_url}/tests/{identity.job_id}/file/autoinst-log.txt")
+    investigation = fetch_json(identity.client, f"{identity.base_url}/tests/{identity.job_id}/investigation_ajax")
+
+    s = job.get("settings", {})
+    settings = JobSettings(
+        build=s.get("BUILD", "unknown"),
+        distri=s.get("DISTRI", "unknown"),
+        version=s.get("VERSION", "unknown"),
+        arch=s.get("ARCH", "unknown"),
+        flavor=s.get("FLAVOR", "unknown"),
+    )
+    stats = _get_history_stats(identity, job, settings, failed_modules)
+    ctx = InvestigationContext(
+        identity=identity,
+        job=job,
+        settings=settings,
+        config=config,
+        failed_modules=failed_modules,
+        build_failures=stats[0],
+        same_module_failures=stats[1],
+        consecutive_failures=stats[2],
+    )
+
+    prompt = _build_prompt(ctx, investigation, log_text)
+
+    req = {"model": config.llm_model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.3}
 
     try:
-        res = client.post(llm_url, json=req, timeout=timeout)
+        res = identity.client.post(config.llm_url, json=req, timeout=config.timeout)
         res.raise_for_status()
-        res_json = res.json()
-        llm_response = res_json["choices"][0]["message"]["content"]
+        llm_response = res.json()["choices"][0]["message"]["content"]
     except httpx.ConnectError:
         log.error(
             "Could not connect to LLM server at %s. Please check if the server is running or the LLM_API_URL environment variable is correct.",
-            llm_url,
+            config.llm_url,
         )
         sys.exit(1)
     except httpx.HTTPStatusError as e:
@@ -236,15 +321,15 @@ Provide exactly 3 sentences answering:
         log.error("LLM API %s (%s) failed: %s", llm_url, llm_model, e)
         sys.exit(1)
 
-    # Print the job URL to stdout ONLY if BISECT: YES is recommended
-    # This makes the script act as a gatekeeper, similar to `openqa-label-known-issues`
+    # Print the job URL to stdout ONLY if BISECT: YES is recommended.
+    # This makes the script act as a gatekeeper, similar to `openqa-label-known-issues`.
     if "BISECT: YES" in llm_response.upper():
-        print(f"{base_url}/tests/{job_id}")
+        print(f"{identity.base_url}/tests/{identity.job_id}")
 
-    if dry:
+    if config.dry:
         print(f"**LLM Investigation summary:**\n\n{llm_response}")
     else:
-        post_comment(base_url, job_id, f"**LLM Investigation summary:**\n\n{llm_response}")
+        post_comment(identity.base_url, identity.job_id, f"**LLM Investigation summary:**\n\n{llm_response}")
 
 
 @app.command()
@@ -267,6 +352,7 @@ def investigate(
         os.environ.get("LLM_TIMEOUT", "600")
     ),
 ) -> None:
+    """Investigate an openQA job failure using an LLM."""
     setup_logging(verbose, quiet)
     base_url, job_id = parse_job_url(job_url)
 
@@ -277,8 +363,11 @@ def investigate(
     llm_url = os.environ.get("LLM_API_URL", "http://localhost:8080/v1/chat/completions")
     llm_model = os.environ.get("LLM_MODEL", "gemma-4-26B-A4B-it")
 
+    config = InvestigationConfig(force=force, dry=dry, llm_url=llm_url, llm_model=llm_model, timeout=timeout)
+
     with httpx.Client(headers={"User-Agent": USER_AGENT}) as client:
-        _perform_investigation(client, base_url, job_id, force, dry, llm_url, llm_model, timeout)
+        identity = JobIdentity(client=client, base_url=base_url, job_id=job_id)
+        _perform_investigation(identity, config)
 
 
 if __name__ == "__main__":
