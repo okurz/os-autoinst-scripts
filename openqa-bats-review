@@ -27,7 +27,6 @@ from urllib3.util.retry import Retry
 PASSED = "label:force_result:passed:" + pathlib.Path(__file__).name
 TIMEOUT = 30
 USER_AGENT = "openqa-bats-review (https://github.com/os-autoinst/os-autoinst-scripts)"
-MIN_JOBS_FOR_COMPARISON = 2
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(sys.argv[0] if __name__ == "__main__" else __name__)
@@ -152,8 +151,11 @@ def resolve_clone_chain(openqa_host: str, job_id: int) -> list[int]:
     return chain
 
 
-def get_expected_logs(distri: str, version: str) -> dict[str, int]:
-    """Get the expected number of logs per testsuite."""
+MIN_FAILURES_FOR_COMPARISON = 2
+
+
+def _get_expected_logs(distri: str, version: str) -> dict[str, int]:
+    """Get expected number of logs per testsuite."""
     expected = {
         "aardvark_testsuite": 1,
         "buildah_testsuite": 2,
@@ -169,6 +171,14 @@ def get_expected_logs(distri: str, version: str) -> dict[str, int]:
         "skopeo_testsuite": 2,
         "umoci_testsuite": 2,
     }
+<<<<<<< HEAD
+||||||| parent of d3c9f4a5 (fix(openqa-bats-review): resolve lint issues and refactor for complexity)
+
+    job_id = chain[0]
+    job = get_job(f"{openqa_host}/api/v1/jobs/{job_id}/details")
+=======
+
+>>>>>>> d3c9f4a5 (fix(openqa-bats-review): resolve lint issues and refactor for complexity)
     # We have more tests on Tumbleweed
     if distri == "opensuse":
         # For buildah we also run conformance tests
@@ -185,7 +195,37 @@ def get_expected_logs(distri: str, version: str) -> dict[str, int]:
     return expected
 
 
-def main(url: str, dry_run: bool = False) -> None:  # noqa: C901, FBT001, FBT002
+def _process_chain(openqa_host: str, chain: list[int], expected: dict[str, int]) -> list[set[str]]:
+    """Process all jobs in the clone chain."""
+    all_failures = []
+    for job_id in chain:
+        job = get_job(f"{openqa_host}/api/v1/jobs/{job_id}/details")
+        logs = [f"{openqa_host}/tests/{job_id}/file/{log}" for log in job["ulogs"] if log.endswith(".xml")]
+        if not logs:
+            log.info("Job %s has no logs, skipping", job_id)
+            continue
+
+        testsuite = job["settings"]["TEST"].removeprefix("container_host_").removesuffix("_crun")
+        expected_logs = expected.get(testsuite)
+        if expected_logs is None:
+            log.warning("Unknown testsuite %s, skipping", testsuite)
+            continue
+
+        if len(logs) != expected_logs:
+            log.info(
+                "Job %s has only %d logs (expected: %d for %s), skipping",
+                job_id,
+                len(logs),
+                expected_logs,
+                testsuite,
+            )
+            continue
+
+        failed = process_logs(logs)
+        all_failures.append(failed)
+    return all_failures
+
+def main(url: str, dry_run: bool = False) -> None:  # noqa: FBT001, FBT002
     """Execute main function."""
     if not url.startswith(("http://", "https://")):
         url = f"https://{url}"
@@ -199,40 +239,13 @@ def main(url: str, dry_run: bool = False) -> None:  # noqa: C901, FBT001, FBT002
         sys.exit(0)
     log.info("Processing clone chain: %s", " -> ".join(map(str, chain)))
 
-    job_id = chain[0]
-    job = get_job(f"{openqa_host}/api/v1/jobs/{job_id}/details")
-    expected = get_expected_logs(job["settings"]["DISTRI"], job["settings"].get("VERSION", ""))
+    first_job = get_job(f"{openqa_host}/api/v1/jobs/{chain[0]}/details")
+    settings = first_job.get("settings", {})
+    expected = _get_expected_logs(settings.get("DISTRI", "unknown"), settings.get("VERSION", "unknown"))
 
-    all_failures = []
+    all_failures = _process_chain(openqa_host, chain, expected)
 
-    for job_id in chain:
-        job = get_job(f"{openqa_host}/api/v1/jobs/{job_id}/details")
-        url = f"{openqa_host}/tests/{job_id}"
-        logs = [f"{openqa_host}/tests/{job_id}/file/{log}" for log in job["ulogs"] if log.endswith(".xml")]
-        if not logs:
-            log.info("Job %s has no logs, skipping", job_id)
-            continue
-
-        testsuite = job["settings"]["TEST"]
-        # We can't use str.removeprefix (added to Python 3.9) so we must index at the start
-        testsuite = testsuite.removeprefix("container_host_")
-        # We can't use str.removesuffix (added to Python 3.9) so we must index at the end
-        testsuite = testsuite.removesuffix("_crun")
-
-        if len(logs) != expected[testsuite]:
-            log.info(
-                "Job %s has only %d logs (expected: %d for %s), skipping",
-                job_id,
-                len(logs),
-                expected[testsuite],
-                testsuite,
-            )
-            continue
-
-        failed = process_logs(logs)
-        all_failures.append(failed)
-
-    if len(all_failures) < MIN_JOBS_FOR_COMPARISON:
+    if len(all_failures) < MIN_FAILURES_FOR_COMPARISON:
         if not all_failures:
             log.info("No logs found in chain. Exiting")
         else:
