@@ -4,11 +4,19 @@
 
 from __future__ import annotations
 
+"""Investigate openQA job failures using Levenshtein distance on log errors.
+
+This script scans all autoinst-log.txt files in the testresults directory searching
+for error messages. Then it computes the Levenshtein distance and posts the
+results as openQA comments.
+"""
+
+from __future__ import annotations
+
 import argparse
 import json
 import logging
 import operator
-import os
 import pathlib
 import sys
 from curses.ascii import isdigit
@@ -19,194 +27,168 @@ from pyecharts import options as opts
 from pyecharts.charts import Graph
 from tqdm import tqdm
 
-"""
-This script scans all autoinst-log.txt files in the testresults directory searching
-for error messages. Then it computes the Levenshtein distance and posts the
-results as openQA comments.
-"""
 
-id_msg = {}
-result = {}
-EXPECTED_DIMENSIONS = 2
-
-
-# I used a JSON file to store some intermediate computation results to reduce time cost.
-# This part finds error messages in autoinst-log.txt
-# Maybe there are multiple errors in a single autoinst-log.txt
-# I think some different code may trigger the same bug.
-# The first line is the most important, so I focus on the first lines of the errors.
-def init_logging():
+def init_logging() -> logging.Logger:
+    """Initialize logging to stdout."""
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler(sys.stdout))
+    if not logger.handlers:
+        logger.addHandler(logging.StreamHandler(sys.stdout))
     return logger
 
 
-def read_errors(path) -> None:
-    global id_msg
-    with pathlib.Path(path).open(encoding="utf-8") as f:
-        text = f.read()
-        anchor = 0
-        begin = text.find("Test died", anchor)
-        while begin != -1:
-            anchor = begin + 1
-            end = text.find("\n", begin)
-            id_msg[path.split("/")[-2]] = text[begin:end]
+class SimilarityAnalyzer:
+    """Analyzer for openQA job failure similarity."""
+
+    def __init__(self, logger: logging.Logger, testdir: str) -> None:
+        """Initialize the analyzer."""
+        self.logger = logger
+        self.testdir = testdir
+        self.id_msg: dict[str, str] = {}
+        self.result: dict[str, list[str]] = {}
+
+    def read_errors(self, path: str | pathlib.Path) -> None:
+        """Read error messages from autoinst-log.txt."""
+        with pathlib.Path(path).open(encoding="utf-8") as f:
+            text = f.read()
+            anchor = 0
             begin = text.find("Test died", anchor)
+            while begin != -1:
+                anchor = begin + 1
+                end = text.find("\n", begin)
+                self.id_msg[pathlib.Path(path).parent.name] = text[begin:end]
+                begin = text.find("Test died", anchor)
 
-
-def read_id_msg(logger, testdir) -> None:
-    global id_msg
-    if not pathlib.Path("id_msg.json").exists():
-        logger.info("id_msg.json does not exist.")
-        all_dirs = os.listdir(testdir)
-        all_dirs = [testdir + item for item in all_dirs]
-        logs = [item + "/autoinst-log.txt" for item in all_dirs]
-
-        for path in tqdm(logs, desc="Processing testresults directory", unit="test"):
-            read_errors(path)
-        id_msg_json = json.dumps(id_msg, sort_keys=False, indent=4, separators=(",", ":"))
-        pathlib.Path("id_msg.json").write_text(id_msg_json, encoding="utf-8")
-
-    # If there exists the JSON file
-    else:
-        logger.info("id_msg.json exists.")
-        with pathlib.Path("id_msg.json").open(encoding="utf-8") as f:
-            id_msg = json.load(f)
-        all_dirs = os.listdir(testdir)
-        checked_dirs = list(id_msg.keys())
-        unchecked_dirs = [i for i in all_dirs if i not in checked_dirs]
-        for job_id in tqdm(unchecked_dirs, desc="Processing testresults directory", unit="test"):
-            path = testdir + job_id + "/autoinst-log.txt"
-            read_errors(path)
-        id_msg_json = json.dumps(id_msg, sort_keys=False, indent=4, separators=(",", ":"))
-        pathlib.Path("id_msg.json").write_text(id_msg_json, encoding="utf-8")
-
-
-# Compute the Levenshtein result and save it.
-# Saving the result in a file may be unnecessary.
-def cal_distance(logger, output, number) -> None:
-    global result
-    if output:
-        f = pathlib.Path("distance_result.txt").open("w", encoding="utf-8")
-    for index, (key1, value1) in enumerate(tqdm(id_msg.items(), desc="Calculating message distance", unit="error")):
-        calculate = {}
-        for key2, value2 in id_msg.items():
-            if key1 == key2:
-                continue
-            calculate[key2] = Levenshtein.distance(value1, value2)
-        calculate_sorted = sorted(calculate.items(), key=operator.itemgetter(1), reverse=False)
-        if output:
-            f.write("Index: " + str(index) + "\n")
-            f.write("Original error message:\n")
-            f.write("Job ID: " + key1 + "\n")
-            f.write(value1 + "\n")
-            f.write("matched error message (top " + str(number) + "):\n")
-        matched_results = []
-        for i in range(number):
-            if output:
-                f.write("Job ID: " + calculate_sorted[i][0] + "\n")
-                f.write(id_msg[calculate_sorted[i][0]] + "\n")
-            matched_results.append(calculate_sorted[i][0])
-        if output:
-            f.write("\n")
-        result[key1] = matched_results
-    if output:
-        logger.info("Distance file output.")
-        f.close()
-
-
-# Post the results in comments by OpenQA_Client
-def post(server, number) -> None:
-    client = OpenQA_Client(server)
-    for origin, matched in tqdm(result.items(), desc="Posting comments", unit="comment"):
-        data = {"bugrefs": []}
-        text = "Top " + str(number) + " similar failures:\r\n"
-        for job_id in matched:
-            text += "[" + job_id + "](https://openqa.opensuse.org/tests/" + job_id + ")\r\n"
-        data["text"] = text
-        client.openqa_request("POST", "jobs/" + origin + "/comments", data)
-
-
-def dict_slice(adict, s, e):
-    keys = adict.keys()
-    d_slice = {}
-    for k in list(keys)[s:e]:
-        d_slice[k] = adict[k]
-    return d_slice
-
-
-def parse_geometry(geometry: str, logger) -> list[str] | None:
-    resolution = geometry.split("x")
-    if len(resolution) != EXPECTED_DIMENSIONS:
-        logger.warning("Wrong geometry format")
-        return None
-    for item in resolution:
-        if not isdigit(item):
-            logger.warning("Wrong geometry format")
-            return None
-    return resolution
-
-
-def draw(logger, points, geometry, save_path) -> None:
-    resolution = parse_geometry(geometry, logger)
-    if not resolution:
-        return
-
-    msg_number = {}
-    for msg in id_msg.values():
-        if msg in msg_number:
-            msg_number[msg] += 1
+    def load_job_messages(self) -> None:
+        """Read error messages from all jobs in testdir."""
+        json_path = pathlib.Path("id_msg.json")
+        test_path = pathlib.Path(self.testdir)
+        if not json_path.exists():
+            self.logger.info("id_msg.json does not exist.")
+            logs = [p / "autoinst-log.txt" for p in test_path.iterdir() if p.is_dir()]
+            for path in tqdm(logs, desc="Processing testresults directory", unit="test"):
+                if path.exists():
+                    self.read_errors(path)
         else:
-            msg_number[msg] = 1
-    cut = dict_slice(msg_number, 0, points)
+            self.logger.info("id_msg.json exists.")
+            with json_path.open(encoding="utf-8") as f:
+                self.id_msg = json.load(f)
+            checked_dirs = set(self.id_msg.keys())
+            unchecked_dirs = [p for p in test_path.iterdir() if p.is_dir() and p.name not in checked_dirs]
+            for job_dir in tqdm(unchecked_dirs, desc="Processing testresults directory", unit="test"):
+                path = job_dir / "autoinst-log.txt"
+                if path.exists():
+                    self.read_errors(path)
 
-    nodes_data = []
-    for msg, freq in cut.items():
-        nodes_data.append(opts.GraphNode(name=msg, symbol_size=freq))
+        with json_path.open("w", encoding="utf-8") as f:
+            json.dump(self.id_msg, f, sort_keys=False, indent=4, separators=(",", ":"))
 
-    links_data = []
-    max_distance = 0
-    min_distance = float("inf")
-    for key1 in cut:
-        for key2 in cut:
-            if key1 == key2:
-                continue
-            L = Levenshtein.distance(key1, key2)
-            max_distance = max(max_distance, L)
-            min_distance = min(min_distance, L)
-    for key1 in cut:
-        for key2 in cut:
-            if key1 == key2:
-                continue
-            L = Levenshtein.distance(key1, key2)
-            if (max_distance + min_distance) / 2 > L:
-                links_data.append(opts.GraphLink(source=key1, target=key2, value=Levenshtein.distance(key1, key2)))
-    (
-        Graph(init_opts=opts.InitOpts(height=resolution[0] + "px", width=resolution[1] + "px"))
-        .add(
-            "",
-            nodes_data,
-            links_data,
-            repulsion=400,
-            edge_length=[10, 1000],
-            layout="force",
-            gravity=0.01,
-            edge_label=opts.LabelOpts(is_show=False, position="middle", formatter="{b} : {c}"),
-            label_opts=opts.LabelOpts(
-                is_show=False,
-            ),
+    def calculate_distances(self, *, output: bool, number: int) -> None:
+        """Calculate Levenshtein distance between error messages."""
+        f = None
+        if output:
+            f = pathlib.Path("distance_result.txt").open("w", encoding="utf-8")
+
+        items = list(self.id_msg.items())
+        for index, (key1, value1) in enumerate(tqdm(items, desc="Calculating message distance", unit="error")):
+            calculate = {}
+            for key2, value2 in items:
+                if key1 == key2:
+                    continue
+                calculate[key2] = Levenshtein.distance(value1, value2)
+
+            calculate_sorted = sorted(calculate.items(), key=operator.itemgetter(1))
+            top_matches = calculate_sorted[:number]
+            matched_ids = [m[0] for m in top_matches]
+            self.result[key1] = matched_ids
+
+            if f:
+                f.write(f"Index: {index}\nOriginal error message:\nJob ID: {key1}\n{value1}\n")
+                f.write(f"matched error message (top {number}):\n")
+                f.writelines(f"Job ID: {mid}\n{self.id_msg[mid]}\n" for mid in matched_ids)
+                f.write("\n")
+
+        if f:
+            self.logger.info("Distance file output.")
+            f.close()
+
+    def post_to_openqa(self, server: str, number: int) -> None:
+        """Post similarity results as comments to openQA."""
+        client = OpenQA_Client(server)
+        for origin, matched in tqdm(self.result.items(), desc="Posting comments", unit="comment"):
+            text = f"Top {number} similar failures:\r\n"
+            for job_id in matched:
+                text += f"[{job_id}](https://openqa.opensuse.org/tests/{job_id})\r\n"
+            client.openqa_request("POST", f"jobs/{origin}/comments", {"text": text})
+
+    @staticmethod
+    def _get_graph_data(cut: dict[str, int]) -> tuple[list[opts.GraphNode], list[opts.GraphLink]]:
+        """Generate nodes and links for the graph with optimized distance calculation."""
+        nodes_data = [opts.GraphNode(name=msg, symbol_size=freq) for msg, freq in cut.items()]
+        links_data = []
+
+        messages = list(cut.keys())
+        n = len(messages)
+        min_items_for_graph = 2
+        if n < min_items_for_graph:
+            return nodes_data, links_data
+
+        distances = {}
+        for i in range(n):
+            for j in range(i + 1, n):
+                dist = Levenshtein.distance(messages[i], messages[j])
+                distances[messages[i], messages[j]] = dist
+
+        all_dists = list(distances.values())
+        max_dist = max(all_dists)
+        min_dist = min(all_dists)
+        threshold = (max_dist + min_dist) / 2
+
+        for (m1, m2), dist in distances.items():
+            if dist < threshold:
+                links_data.append(opts.GraphLink(source=m1, target=m2, value=dist))
+
+        return nodes_data, links_data
+
+    def draw_chart(self, points: int, geometry: str, save_path: str) -> None:
+        """Draw a graph of error message similarities."""
+        resolution = geometry.split("x")
+        expected_parts = 2
+        if len(resolution) != expected_parts or not all(isdigit(i) for i in resolution):
+            self.logger.warning("Wrong geometry format")
+            return
+
+        msg_counts = {}
+        for msg in self.id_msg.values():
+            msg_counts[msg] = msg_counts.get(msg, 0) + 1
+
+        # Slice top 'points' messages
+        sorted_msgs = sorted(msg_counts.items(), key=operator.itemgetter(1), reverse=True)
+        cut = dict(sorted_msgs[:points])
+
+        nodes_data, links_data = self._get_graph_data(cut)
+        (
+            Graph(init_opts=opts.InitOpts(height=f"{resolution[0]}px", width=f"{resolution[1]}px"))
+            .add(
+                "",
+                nodes_data,
+                links_data,
+                repulsion=400,
+                edge_length=[10, 1000],
+                layout="force",
+                gravity=0.01,
+                edge_label=opts.LabelOpts(is_show=False, position="middle", formatter="{b} : {c}"),
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .set_global_opts(title_opts=opts.TitleOpts(title="Levenshtein distance"))
+            .render(save_path)
         )
-        .set_global_opts(title_opts=opts.TitleOpts(title="Levenshtein distance"))
-        .render(save_path)
-    )
 
 
 if __name__ == "__main__":
     help_message = (
         "This script scans all autoinst-log.txt files in the testresults directory searching for error "
-        "messages. Then it "
-        "computes the Levenshtein distance and posts the results as openQA comments. "
+        "messages. Then it computes the Levenshtein distance and posts the results as openQA comments."
     )
     parser = argparse.ArgumentParser(description=help_message)
     parser.add_argument("-o", "--output", action="store_true", help="Whether outputs the results into a txt file")
@@ -219,7 +201,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "-c",
         "--chart",
-        required="--geometry" in sys.argv or "--save" in sys.argv,
         default=0,
         type=int,
         help="Number of points in chart (If the number is 0, the chart won't be drawn)",
@@ -229,10 +210,13 @@ if __name__ == "__main__":
         "--save", default="./similarity.html", type=str, help="Path and name to save the chart (e.g. ./similarity.html)"
     )
     args = parser.parse_args()
-    logger = init_logging()
-    read_id_msg(logger=logger, testdir=args.dir)
-    cal_distance(logger=logger, output=args.output, number=args.number)
+
+    log_obj = init_logging()
+    analyzer = SimilarityAnalyzer(log_obj, args.dir)
+    analyzer.load_job_messages()
+    analyzer.calculate_distances(output=args.output, number=args.number)
+
     if args.post:
-        post(server=args.server, number=args.number)
+        analyzer.post_to_openqa(server=args.server, number=args.number)
     if args.chart != 0:
-        draw(logger=logger, points=args.chart, geometry=args.geometry, save_path=args.save)
+        analyzer.draw_chart(points=args.chart, geometry=args.geometry, save_path=args.save)
