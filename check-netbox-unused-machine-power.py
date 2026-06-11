@@ -12,14 +12,10 @@ from __future__ import annotations
 import os
 import re
 import sys
-from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import netsnmp
 import pynetbox
-
-if TYPE_CHECKING:
-    from pynetbox.models import dcim
 
 BACHMANN_RELAY_ON = 19  # Bachmann PDU relay status value for "on"
 

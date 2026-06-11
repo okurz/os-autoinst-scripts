@@ -135,6 +135,10 @@ max-complexity = 9
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["PLR2004", "ANN401", "PLR0913", "S101", "S105", "S106", "PLR0917", "D103"]
+"check-netbox-unused-machine-power.py" = ["TC002"]
+"openqa-bats-review" = ["PLR0912", "PLR0915", "PLR2004"]
+"openqa-post-similarity" = ["D100", "D103", "PLR0912", "PLR2004", "N806"]
+"s390x-qemu-zombie-reaper.py" = ["PLW0717"]
 
 [tool.ruff.format]
 # Enable reformatting of code snippets in docstrings.
