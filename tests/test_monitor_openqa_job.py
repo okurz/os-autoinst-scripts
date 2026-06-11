@@ -205,6 +205,7 @@ def test_comment_on_failed_jobs(mocker: MockerFixture, pkg: str, comment_obs: st
 ||||||| parent of 378ecede (feat: rewrite monitor-openqa_job in Python)
 =======
 # Copyright SUSE LLC
+# ruff: noqa: S404
 """Unit tests for monitor-openqa_job."""
 
 from __future__ import annotations
@@ -215,7 +216,7 @@ import json
 import pathlib
 import subprocess
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, Mock
 
 import httpx
@@ -393,7 +394,7 @@ def test_monitor_single_job_success(mocker: MockerFixture) -> None:
     mock_fetch.return_value = {"job": {"id": 123, "state": "done", "result": "passed"}}
     client = MagicMock()
 
-    final_id, result, version = monitor_job.monitor_single_job(client, 123, "http://host", 2, 0, "never")
+    final_id, result, _version = monitor_job.monitor_single_job(client, 123, "http://host", 2, 0, "never")
     assert final_id == 123
     assert result == "passed"
     mock_fetch.assert_called_once()
