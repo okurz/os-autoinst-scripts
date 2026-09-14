@@ -133,7 +133,7 @@ def test_prepare_local_clone_fetches_before_switch(mocker: MockerFixture) -> Non
     """Fetch parent before creating the branch so a fork lacking it still works."""
     mock_run = mocker.patch("auto_submit.subprocess.run")
     mocker.patch("auto_submit.pathlib.Path.iterdir", return_value=[])
-    submitter = auto_submit.AutoSubmitter(dst_project="dst", git_cmd_str="git", dry_run=False)
+    submitter = auto_submit.AutoSubmitter(dst_project="dst", git_cmd_str="git", dir=pathlib.Path(""), dry_run=False)
     submitter._prepare_local_clone("openQA", "leap-16.0")  # ruff: ignore[private-member-access]
     git_calls = [call.args[0] for call in mock_run.call_args_list]
     assert git_calls[0] == ["git", "fetch", "parent"]
@@ -323,13 +323,13 @@ def test_update_package_no_changes(caplog: pytest.LogCaptureFixture, mocker: Moc
     mocker.patch("auto_submit.AutoSubmitter._commit_local_changes", return_value=False)
     mocker.patch("auto_submit._run_cmd", return_value=True)
 
-    (tmp_path / "pkg").mkdir(parents=True, exist_ok=True)
-
     content = "Line 1\nLine 2"
     changes_file = "pkg.changes"
-    (tmp_path / "pkg" / changes_file).write_text(content, encoding="utf-8")
 
-    monkeypatch.chdir(tmp_path / "pkg")
+    (tmp_path / "dst" / "pkg").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "dst" / "pkg" / changes_file).write_text(content, encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path / "dst" / "pkg")
     submitter = auto_submit.AutoSubmitter(
         dst_project="dst",
         osc_cmd_str="osc",
@@ -352,23 +352,24 @@ def test_update_package(caplog: pytest.LogCaptureFixture, mocker: MockerFixture,
     mocker.patch("auto_submit.AutoSubmitter._commit_local_changes", return_value=True)
     mocker.patch("auto_submit.AutoSubmitter._commit_and_push", return_value=True)
     mocker.patch("auto_submit.AutoSubmitter._create_pull_request", return_value=True)
-    mocker.patch("auto_submit.AutoSubmitter.has_pending_submission", return_value=True)
+    mocker.patch("auto_submit.AutoSubmitter.has_pending_submission", return_value=False)
     mocker.patch("auto_submit._run_cmd", return_value=True)
 
     def mocked_clone(package: str) -> str:
-        dir = (tmp_path / "git-repos" / package).mkdir(parents=True, exist_ok=True)
-        return "foo/" + package
+        (pathlib.Path() / package).mkdir(parents=True, exist_ok=True)
+        return "owner/" + package
 
     mocker.patch("auto_submit.AutoSubmitter._fork_and_clone_repo", return_value=True, side_effect=mocked_clone)
 
-    (tmp_path / "pkg").mkdir(parents=True, exist_ok=True)
-
     content = "Line 1\nLine 2"
     changes_file = "pkg.changes"
-    (tmp_path / "pkg" / changes_file).write_text(content, encoding="utf-8")
 
-    monkeypatch.chdir(tmp_path / "pkg")
+    (tmp_path / "dst" / "pkg").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "dst" / "pkg" / changes_file).write_text(content, encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path / "dst" / "pkg")
     submitter = auto_submit.AutoSubmitter(
+        dir=tmp_path,
         dst_project="dst",
         osc_cmd_str="osc",
         dry_run=False,

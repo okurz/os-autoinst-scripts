@@ -216,6 +216,7 @@ def generate_changelog(dir_path: str, package: str, submit_target: str, osc_cmd_
 class AutoSubmitter:
     """Automate the preparation and submission of packages."""
 
+    dir: pathlib.Path = ""
     src_project: str = "devel:openQA"
     dst_project: str = ""
     staging_project: str = ""
@@ -376,7 +377,7 @@ class AutoSubmitter:
                 else:
                     item.unlink()
 
-            source_dir = pathlib.Path("../..").resolve() / package
+            source_dir = self.dir / self.dst_project / package
             for item in source_dir.iterdir():
                 if item.is_file():
                     shutil.copy2(item, ".")
@@ -449,18 +450,12 @@ class AutoSubmitter:
         if not forked_repo:
             return False
 
-        git_dir = pathlib.Path("../git-repos").resolve() / package
-        original_dir = pathlib.Path.cwd()
         if not self.dry_run:
-            git_dir.mkdir(parents=True, exist_ok=True)
-            os.chdir(git_dir)
+            os.chdir(package)
 
-        try:
-            self._prepare_local_clone(package, branch)
-            self._commit_and_push(title, branch)
-            return self._create_pull_request(title, description, branch)
-        finally:
-            os.chdir(original_dir)
+        self._prepare_local_clone(package, branch)
+        self._commit_and_push(title, branch)
+        return self._create_pull_request(title, description, branch)
 
     def has_pending_submission(  # ruff: ignore[complex-structure]
         self,
@@ -671,12 +666,20 @@ class AutoSubmitter:
             log.info("## Ready to submit %s to %s ##", package, target)
             git_branch = git_branches.get(target)
             if git_branch:
+                git_dir = self.dir / "git-repos"
+                if not self.dry_run:
+                    git_dir.mkdir(exist_ok=True)
+                    os.chdir(git_dir)
+
                 res_submit = self.make_git_submit_request(
                     package=package,
                     version=version,
                     branch=git_branch,
                 )
             else:
+                dst_dir = self.dir / self.dst_project / package
+                os.chdir(dst_dir)
+
                 res_submit = self.make_obs_submit_request(
                     package=package,
                     target=target,
@@ -752,19 +755,14 @@ class AutoSubmitter:
                 for item in dst_dir.iterdir():
                     if item.is_file():
                         item.unlink()
-            dst_dir.mkdir(parents=True, exist_ok=True)
             if src_dir.is_dir():
                 for item in src_dir.iterdir():
                     if item.is_file():
                         shutil.copy2(item, dst_dir)
 
-        original_dir = pathlib.Path.cwd()
-        try:
-            if not self.dry_run:
-                os.chdir(dst_dir)
-            return self.update_package(package=package)
-        finally:
-            os.chdir(original_dir)
+        if not self.dry_run:
+            os.chdir(dst_dir)
+        return self.update_package(package=package)
 
 
 def _format_skip_reason(content: str) -> str:
@@ -893,53 +891,54 @@ def _run_submissions(  # ruff: ignore[complex-structure, too-many-branches, too-
         actual_src_project = staging_project
         must_cleanup_staging = True
 
-    submitter = AutoSubmitter(
-        src_project=actual_src_project,
-        dst_project=dst_project,
-        staging_project=staging_project,
-        submit_target=submit_target,
-        dry_run=dry_run,
-        osc_poll_interval=osc_poll_interval,
-        osc_build_start_poll_tries=osc_build_start_poll_tries,
-        throttle_days=throttle_days,
-        throttle_days_leap_16=throttle_days_leap_16,
-        git_user=git_user,
-        osc_cmd_str=osc_cmd_str,
-        git_cmd_str=git_cmd_str,
-        git_obs_cmd_str=git_obs_cmd_str,
-        git_obs_no_retry_cmd_str=git_obs_no_retry_cmd_str,
-        targets=targets,
-    )
 
     with tempfile.TemporaryDirectory(prefix="os-autoinst-obs-auto-submit-", dir=tmpdir_base) as tmpdir_path:
-        os.chdir(tmpdir_path)
-        try:
-            rc = 0
-            for package in auto_submit_packages:
-                success = submitter.handle_auto_submit(package=package)
-                if not success:
-                    rc = 1
+        submitter = AutoSubmitter(
+            dir=pathlib.Path(tmpdir_path),
+            src_project=actual_src_project,
+            dst_project=dst_project,
+            staging_project=staging_project,
+            submit_target=submit_target,
+            dry_run=dry_run,
+            osc_poll_interval=osc_poll_interval,
+            osc_build_start_poll_tries=osc_build_start_poll_tries,
+            throttle_days=throttle_days,
+            throttle_days_leap_16=throttle_days_leap_16,
+            git_user=git_user,
+            osc_cmd_str=osc_cmd_str,
+            git_cmd_str=git_cmd_str,
+            git_obs_cmd_str=git_obs_cmd_str,
+            git_obs_no_retry_cmd_str=git_obs_no_retry_cmd_str,
+            targets=targets,
+        )
 
-                if must_cleanup_staging:
-                    del_cmd = [
-                        *shlex.split(osc_cmd_str),
-                        "rdelete",
-                        "-m",
-                        f"Cleaning up {package} from {staging_project} for next submission",
-                        staging_project,
-                        package,
-                    ]
-                    run_osc_cmd(del_cmd, dry_run=dry_run, mutating=True)
+        rc = 0
+        for package in auto_submit_packages:
+            os.chdir(tmpdir_path)
+            success = submitter.handle_auto_submit(package=package)
+            if not success:
+                rc = 1
 
-            if submitter.failed_packages:
-                log.warning("Failed packages:")
-                for pkg in submitter.failed_packages:
-                    log.warning("- %s", pkg)
+            if must_cleanup_staging:
+                del_cmd = [
+                    *shlex.split(osc_cmd_str),
+                    "rdelete",
+                    "-m",
+                    f"Cleaning up {package} from {staging_project} for next submission",
+                    staging_project,
+                    package,
+                ]
+                run_osc_cmd(del_cmd, dry_run=dry_run, mutating=True)
 
-            if rc != 0:
-                raise typer.Exit(code=rc)
-        finally:
-            os.chdir(original_dir)
+        if submitter.failed_packages:
+            log.warning("Failed packages:")
+            for pkg in submitter.failed_packages:
+                log.warning("- %s", pkg)
+
+        if rc != 0:
+            raise typer.Exit(code=rc)
+
+    os.chdir(original_dir)
 
     # Cleanup obs project
     if force or not pathlib.Path("job_post_skip_submission").exists():
