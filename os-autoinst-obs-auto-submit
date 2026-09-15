@@ -609,7 +609,7 @@ class AutoSubmitter:
 
         if relevant_changes < 1:
             log.info("## Not updating package '%s/%s' as only changelogs were modified", self.dst_project, package)
-            return True
+            return False
 
         ci_args = []
         if package == "os-autoinst-distri-opensuse-deps" or "container" in package:

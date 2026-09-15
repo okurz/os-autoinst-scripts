@@ -315,6 +315,35 @@ def test_run_osc_cmd_error_logging(caplog: pytest.LogCaptureFixture, mocker: Moc
     assert "Command stderr:\nsome stderr" in messages[0]
 
 
+def test_update_package_no_changes(caplog: pytest.LogCaptureFixture, mocker: MockerFixture, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    mocker.patch("auto_submit.AutoSubmitter._disable_service_buildtime", return_value="23")
+    mocker.patch("auto_submit.AutoSubmitter._cleanup_and_rename_files", return_value="23")
+    mocker.patch("auto_submit.AutoSubmitter._find_version", return_value="23")
+    mocker.patch("auto_submit.AutoSubmitter._osc_addremove_and_filter_specs", return_value="23")
+    mocker.patch("auto_submit.AutoSubmitter._commit_local_changes", return_value=False)
+    mocker.patch("auto_submit._run_cmd", return_value=True)
+
+    (tmp_path / "pkg").mkdir(parents=True, exist_ok=True)
+
+    content = "Line 1\nLine 2"
+    changes_file = "pkg.changes"
+    (tmp_path / "pkg" / changes_file).write_text(content, encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path / "pkg")
+    submitter = auto_submit.AutoSubmitter(
+        dst_project="dst",
+        osc_cmd_str="osc",
+        dry_run=False,
+        targets=["openSUSE:Leap:16.0"],
+    )
+    caplog.set_level(logging.INFO)
+    res = submitter.update_package("pkg")
+    assert caplog.records[0].getMessage() == "update_package pkg"
+    assert len(caplog.records) == 1
+    assert res is False
+    assert (tmp_path / "git-repos" / "pkg" / changes_file).exists
+
+
 def test_update_package(caplog: pytest.LogCaptureFixture, mocker: MockerFixture, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     mocker.patch("auto_submit.AutoSubmitter._disable_service_buildtime", return_value="23")
     mocker.patch("auto_submit.AutoSubmitter._cleanup_and_rename_files", return_value="23")
