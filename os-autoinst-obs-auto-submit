@@ -438,7 +438,6 @@ class AutoSubmitter:
     def make_git_submit_request(
         self,
         package: str,
-        _target: str,
         version: str,
         branch: str,
     ) -> bool:
@@ -674,7 +673,6 @@ class AutoSubmitter:
             if git_branch:
                 res_submit = self.make_git_submit_request(
                     package=package,
-                    _target=target,
                     version=version,
                     branch=git_branch,
                 )
