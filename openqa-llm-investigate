@@ -3,6 +3,8 @@
 # ruff: file-ignore[complex-structure, line-too-long, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, error-instead-of-exception]
 """Investigates an openQA job failure using an LLM."""
 
+from __future__ import annotations
+
 import datetime
 import json
 import logging
