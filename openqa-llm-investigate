@@ -7,6 +7,7 @@ import datetime
 import json
 import logging
 import os
+import pathlib
 import subprocess
 import sys
 from collections import deque
@@ -182,6 +183,39 @@ def _shares_failed_modules(other_job: dict[str, Any], target_modules: set[str]) 
     return bool(target_modules.intersection(other_failed))
 
 
+def _call_llm_api(
+    client: httpx.Client,
+    llm_url: str,
+    llm_model: str,
+    llm_token: str | None,
+    timeout: int,
+    prompt: str,
+) -> str:
+    req = {
+        "model": llm_model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3,
+    }
+    headers = {"Authorization": f"Bearer {llm_token}"} if llm_token else {}
+    try:
+        res = client.post(llm_url, json=req, headers=headers, timeout=timeout)
+        res.raise_for_status()
+        res_json = res.json()
+        return res_json["choices"][0]["message"]["content"]
+    except httpx.ConnectError:
+        log.error(
+            "Could not connect to LLM server at %s. Please check if the server is running or the LLM_API_URL environment variable is correct.",
+            llm_url,
+        )
+        sys.exit(1)
+    except httpx.HTTPStatusError as e:
+        log.error("LLM API %s (%s) status %d: %s", llm_url, llm_model, e.response.status_code, e.response.text)
+        sys.exit(1)
+    except Exception as e:
+        log.error("LLM API %s (%s) failed: %s", llm_url, llm_model, e)
+        sys.exit(1)
+
+
 def _perform_investigation(
     client: httpx.Client,
     base_url: str,
@@ -192,6 +226,10 @@ def _perform_investigation(
     llm_model: str,
     timeout: int,
     llm_token: str | None,
+    log_lines: int,
+    history_limit: int,
+    build_failure_threshold: int,
+    prompt_template_file: str | None,
 ) -> None:
     # Check for existing LLM investigation comments
     comments = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}/comments", default=[])
@@ -215,7 +253,7 @@ def _perform_investigation(
 
     failed_modules = [m.get("name", "unknown") for m in job.get("testresults", []) if m.get("result") == "failed"]
 
-    log_text = fetch_text(client, f"{base_url}/tests/{job_id}/file/autoinst-log.txt")
+    log_text = fetch_text(client, f"{base_url}/tests/{job_id}/file/autoinst-log.txt", max_lines=log_lines)
     investigation = fetch_json(client, f"{base_url}/tests/{job_id}/investigation_ajax")
 
     test_name = job.get("test", "unknown")
@@ -244,7 +282,7 @@ def _perform_investigation(
         "version": version,
         "arch": arch,
         "flavor": flavor,
-        "limit": 100,
+        "limit": history_limit,
     }
     test_history_data = fetch_json(client, f"{base_url}/api/v1/jobs", params=test_params)
     test_jobs = sorted(test_history_data.get("jobs", []), key=lambda x: x["id"], reverse=True)
@@ -269,29 +307,34 @@ def _perform_investigation(
         )
 
     hint = ""
-    if build_failures > 20:
+    if build_failures > build_failure_threshold:
         hint = f"\n(Note: {build_failures} failures across this build strongly implies a backend infrastructure outage or a widespread environment issue rather than a specific product bug.)"
 
-    prompt = f"""You are analyzing an openQA test run failure.
+    prompt_extension = settings.get("LLM_PROMPT_EXTENSION")
+    prompt_extension_text = (
+        f"\n\nTest-specific instructions from openQA variables:\n{prompt_extension}\n" if prompt_extension else ""
+    )
+
+    default_prompt_template = """You are analyzing an openQA test run failure.
 Job details:
 - Test: {test_name}
-- Failed module(s): {", ".join(failed_modules) if failed_modules else "unknown"}
-- Group: {job.get("group", "unknown")}
+- Failed module(s): {failed_modules}
+- Group: {group}
 - Build: {build}
 - Distri: {distri}
 - Version: {version}
 - Arch: {arch}
 - Flavor: {flavor}
-- Result: {job.get("result", "unknown")}
+- Result: {result}
 - Total failed jobs in this build (across all tests): {build_failures}{hint}
 - Other jobs in this build failing in the exact same module(s): {same_module_failures}
 - Consecutive recent failures for this specific test (same name, arch, flavor): {consecutive_failures}
 
 Investigation info (diff to last good):
-{json.dumps(investigation.get("diff_to_last_good", "None available"))}
+{investigation_info}
 
-Log tail (last 200 lines):
-{log_text}
+Log tail (last {log_lines} lines):
+{log_text}{prompt_extension_text}
 
 Provide exactly 3 sentences answering:
 1. Is it a new or existing issue? Is it likely a product regression, test regression, or infrastructure problem?
@@ -301,31 +344,36 @@ Provide exactly 3 sentences answering:
    - If the failure is isolated to ONLY this job in the current build, AND the log contains an explicit product error or test assertion failure (e.g., 'actual size fits X: fail', 'command not found', 'segmentation fault'), it strongly points to a new regression. In this isolated case, you MUST answer BISECT: YES.
 """
 
-    req = {
-        "model": llm_model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3,
-    }
+    if prompt_template_file:
+        try:
+            prompt_template = pathlib.Path(prompt_template_file).read_text(encoding="utf-8")
+        except OSError as e:
+            log.error("Could not read prompt template file %s: %s", prompt_template_file, e)
+            sys.exit(1)
+    else:
+        prompt_template = default_prompt_template
 
-    headers = {"Authorization": f"Bearer {llm_token}"} if llm_token else {}
+    prompt = prompt_template.format(
+        test_name=test_name,
+        failed_modules=", ".join(failed_modules) if failed_modules else "unknown",
+        group=job.get("group", "unknown"),
+        build=build,
+        distri=distri,
+        version=version,
+        arch=arch,
+        flavor=flavor,
+        result=job.get("result", "unknown"),
+        build_failures=build_failures,
+        hint=hint,
+        same_module_failures=same_module_failures,
+        consecutive_failures=consecutive_failures,
+        investigation_info=json.dumps(investigation.get("diff_to_last_good", "None available")),
+        log_lines=log_lines,
+        log_text=log_text,
+        prompt_extension_text=prompt_extension_text,
+    )
 
-    try:
-        res = client.post(llm_url, json=req, headers=headers, timeout=timeout)
-        res.raise_for_status()
-        res_json = res.json()
-        llm_response = res_json["choices"][0]["message"]["content"]
-    except httpx.ConnectError:
-        log.error(
-            "Could not connect to LLM server at %s. Please check if the server is running or the LLM_API_URL environment variable is correct.",
-            llm_url,
-        )
-        sys.exit(1)
-    except httpx.HTTPStatusError as e:
-        log.error("LLM API %s (%s) status %d: %s", llm_url, llm_model, e.response.status_code, e.response.text)
-        sys.exit(1)
-    except Exception as e:
-        log.error("LLM API %s (%s) failed: %s", llm_url, llm_model, e)
-        sys.exit(1)
+    llm_response = _call_llm_api(client, llm_url, llm_model, llm_token, timeout, prompt)
 
     # Print the job URL to stdout ONLY if BISECT: YES is recommended
     # This makes the script act as a gatekeeper, similar to `openqa-label-known-issues`
@@ -369,6 +417,28 @@ def investigate(
     llm_token: Annotated[
         str | None, typer.Option("--llm-token", envvar="LLM_API_TOKEN", help="API token for authentication")
     ] = os.environ.get("LLM_API_TOKEN"),
+    log_lines: Annotated[
+        int, typer.Option("--log-lines", envvar="LLM_LOG_LINES", help="Number of log lines to fetch")
+    ] = int(os.environ.get("LLM_LOG_LINES", "200")),
+    history_limit: Annotated[
+        int, typer.Option("--history-limit", envvar="LLM_HISTORY_LIMIT", help="Limit for consecutive failure lookup")
+    ] = int(os.environ.get("LLM_HISTORY_LIMIT", "100")),
+    build_failure_threshold: Annotated[
+        int,
+        typer.Option(
+            "--build-failure-threshold",
+            envvar="LLM_BUILD_FAILURE_THRESHOLD",
+            help="Threshold for infrastructure outage hint",
+        ),
+    ] = int(os.environ.get("LLM_BUILD_FAILURE_THRESHOLD", "20")),
+    prompt_template_file: Annotated[
+        str | None,
+        typer.Option(
+            "--prompt-template-file",
+            envvar="LLM_PROMPT_TEMPLATE_FILE",
+            help="File containing the prompt template to use",
+        ),
+    ] = os.environ.get("LLM_PROMPT_TEMPLATE_FILE"),
 ) -> None:
     setup_logging(verbose, quiet)
     base_url, job_id = parse_job_url(job_url)
@@ -379,7 +449,21 @@ def investigate(
 
     transport = RetryTransport(retries=retries)
     with httpx.Client(transport=transport, headers={"User-Agent": USER_AGENT}) as client:
-        _perform_investigation(client, base_url, job_id, force, dry, llm_url, llm_model, timeout, llm_token)
+        _perform_investigation(
+            client,
+            base_url,
+            job_id,
+            force,
+            dry,
+            llm_url,
+            llm_model,
+            timeout,
+            llm_token,
+            log_lines,
+            history_limit,
+            build_failure_threshold,
+            prompt_template_file,
+        )
 
 
 if __name__ == "__main__":
