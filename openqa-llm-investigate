@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import pathlib
-import subprocess
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 from collections import deque
 from email.utils import parsedate_to_datetime
@@ -148,7 +148,7 @@ def post_comment(base_url: str, job_id: str, comment: str) -> None:
         f"text={comment}",
     ]
     try:
-        res = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        res = subprocess.run(cmd, check=True, capture_output=True, text=True)  # ruff: ignore[subprocess-without-shell-equals-true]
         log.debug("Posted comment to %s/t%s: %s", base_url, job_id, res.stdout)
     except subprocess.CalledProcessError as e:
         log.exception("Failed to post comment: %s", e.stderr)
