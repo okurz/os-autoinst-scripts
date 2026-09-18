@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[any-type, complex-structure, line-too-long, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, magic-value-comparison, error-instead-of-exception]
+# ruff: file-ignore[any-type, complex-structure, line-too-long, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, error-instead-of-exception]
 """Investigates an openQA job failure using an LLM."""
 
 import datetime
@@ -171,7 +171,7 @@ def post_comment(base_url: str, job_id: str, comment: str) -> None:
 def setup_logging(verbose: int, quiet: bool) -> None:
     if quiet:
         level = logging.ERROR
-    elif verbose >= 2:
+    elif verbose >= 2:  # ruff: ignore[magic-value-comparison]
         level = logging.DEBUG
     elif verbose >= 1:
         level = logging.INFO
