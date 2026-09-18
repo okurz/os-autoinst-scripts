@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[complex-structure, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, error-instead-of-exception]
 """Investigates an openQA job failure using an LLM."""
 
 from __future__ import annotations
@@ -212,7 +211,7 @@ def _shares_failed_modules(other_job: dict[str, Any], target_modules: set[str]) 
     return bool(target_modules.intersection(other_failed))
 
 
-def _call_llm_api(
+def _call_llm_api(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     client: httpx.Client,
     llm_url: str,
     llm_model: str,
@@ -249,7 +248,7 @@ def _call_llm_api(
         sys.exit(1)
 
 
-def _perform_investigation(
+def _perform_investigation(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-statements, complex-structure]
     client: httpx.Client,
     base_url: str,
     job_id: str,
@@ -430,7 +429,7 @@ it strongly points to a new regression. In this isolated case, you MUST answer B
 
 
 @app.command()
-def investigate(
+def investigate(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     job_url: str = typer.Argument(..., help="The openQA test URL or job ID for which to trigger LLM investigation"),
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity")] = 0,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="Quiet mode")] = False,  # ruff: ignore[boolean-default-value-positional-argument]
