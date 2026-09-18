@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[complex-structure, line-too-long, future-required-type-annotation, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
+# ruff: file-ignore[complex-structure, line-too-long, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
 """Investigates an openQA job failure using an LLM."""
+
+from __future__ import annotations
 
 import datetime
 import json
