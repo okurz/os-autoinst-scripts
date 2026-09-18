@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[any-type, blind-except, complex-structure, line-too-long, future-required-type-annotation, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, magic-value-comparison]
+# ruff: file-ignore[any-type, complex-structure, line-too-long, future-required-type-annotation, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, magic-value-comparison]
 """Investigates an openQA job failure using an LLM."""
 
 import datetime
@@ -65,7 +65,7 @@ class RetryTransport(httpx.HTTPTransport):
                 try:
                     dt = parsedate_to_datetime(retry_after)
                     delay = (dt - self._now()).total_seconds()
-                except Exception as e:
+                except (ValueError, TypeError) as e:
                     log.debug("Failed to parse Retry-After header as date: %s", e)
 
         if delay <= 0.0:
@@ -116,7 +116,7 @@ def fetch_json(client: httpx.Client, url: str, params: dict[str, Any] | None = N
         response = client.get(url, params=params)
         response.raise_for_status()
         return response.json()
-    except Exception as e:
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as e:
         log.warning("Failed to fetch JSON from %s with params %s: %s", url, params, e)
         return default if default is not None else {}
 
@@ -129,7 +129,7 @@ def fetch_text(client: httpx.Client, url: str, max_lines: int = 200) -> str:
             for line in response.iter_lines():
                 lines.append(line)
         return "\n".join(lines)
-    except Exception as e:
+    except (httpx.RequestError, httpx.HTTPStatusError) as e:
         log.warning("Failed to fetch text from %s: %s", url, e)
         return ""
 
