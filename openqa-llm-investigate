@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[any-type, complex-structure, line-too-long, future-required-type-annotation, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
+# ruff: file-ignore[any-type, complex-structure, line-too-long, future-required-type-annotation, boolean-type-hint-positional-argument, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
 """Investigates an openQA job failure using an LLM."""
 
 import datetime
 import json
 import logging
+import operator
 import os
 import pathlib
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
@@ -285,7 +286,7 @@ def _perform_investigation(
         "limit": history_limit,
     }
     test_history_data = fetch_json(client, f"{base_url}/api/v1/jobs", params=test_params)
-    test_jobs = sorted(test_history_data.get("jobs", []), key=lambda x: x["id"], reverse=True)
+    test_jobs = sorted(test_history_data.get("jobs", []), key=operator.itemgetter("id"), reverse=True)
 
     target_id_int = int(job_id)
     valid_results = {"passed", "softfailed", "failed"}
