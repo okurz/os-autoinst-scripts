@@ -319,7 +319,7 @@ class AutoSubmitter:
     def _fork_and_clone_repo(self, package: str) -> str:
         """Fork and clone the target repository."""
         git_obs_cmd = shlex.split(self.git_obs_cmd_str)
-        fork_cmd = [*git_obs_cmd, "repo", "fork", f"pool/{package}"]
+        fork_cmd = [*git_obs_cmd, "repo", "fork", f"pool/{package}", "--new-repo-name", package]
         if self.dry_run:
             log.info("[dry-run] Would execute: %s", " ".join(fork_cmd))
             forked_repo = f"pool/{package}"
@@ -476,7 +476,6 @@ class AutoSubmitter:
         if git_branch:
             cmd = [
                 *shlex.split(self.git_obs_cmd_str),
-                "-q",
                 "api",
                 f"repos/pool/{package}/pulls?state=open&sort=recentupdate",
             ]
