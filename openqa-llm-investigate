@@ -360,6 +360,15 @@ def investigate(
     retries: Annotated[int, typer.Option("--retries", help="Number of retries on retry-worthy HTTP responses")] = int(
         os.environ.get("LLM_RETRIES", "7")
     ),
+    llm_url: Annotated[
+        str, typer.Option("--llm-url", envvar="LLM_API_URL", help="URL for the LLM API endpoint")
+    ] = os.environ.get("LLM_API_URL", "http://localhost:8080/v1/chat/completions"),
+    llm_model: Annotated[
+        str, typer.Option("--llm-model", envvar="LLM_MODEL", help="The LLM model to use")
+    ] = os.environ.get("LLM_MODEL", "gemma-4-26B-A4B-it"),
+    llm_token: Annotated[
+        str | None, typer.Option("--llm-token", envvar="LLM_API_TOKEN", help="API token for authentication")
+    ] = os.environ.get("LLM_API_TOKEN"),
 ) -> None:
     setup_logging(verbose, quiet)
     base_url, job_id = parse_job_url(job_url)
@@ -367,10 +376,6 @@ def investigate(
     if not job_id.isdigit():
         log.error("Invalid job ID: %s", job_id)
         sys.exit(1)
-
-    llm_url = os.environ.get("LLM_API_URL", "http://localhost:8080/v1/chat/completions")
-    llm_model = os.environ.get("LLM_MODEL", "gemma-4-26B-A4B-it")
-    llm_token = os.environ.get("LLM_API_TOKEN")
 
     transport = RetryTransport(retries=retries)
     with httpx.Client(transport=transport, headers={"User-Agent": USER_AGENT}) as client:

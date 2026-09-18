@@ -163,7 +163,7 @@ def test_investigate_cmd_with_token(mocker: MockerFixture) -> None:
     mocker.patch.dict("os.environ", {"LLM_API_TOKEN": "my-secret-token"})
     client = setup_mock_client(mocker)
 
-    llm_investigate.investigate("123")
+    llm_investigate.investigate("123", llm_token="my-secret-token")
 
     client.post.assert_called_once()
     assert client.post.call_args[1]["headers"] == {"Authorization": "Bearer my-secret-token"}
