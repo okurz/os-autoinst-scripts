@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[any-type, complex-structure, line-too-long, future-required-type-annotation, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
+# ruff: file-ignore[complex-structure, line-too-long, future-required-type-annotation, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
 """Investigates an openQA job failure using an LLM."""
 
 import datetime
@@ -39,7 +39,7 @@ class RetryTransport(httpx.HTTPTransport):
 
     RETRY_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 
-    def __init__(self, retries: int = 1, **kwargs: Any) -> None:
+    def __init__(self, retries: int = 1, **kwargs: Any) -> None:  # ruff: ignore[any-type]
         """Initialize the RetryTransport with a configurable number of retries."""
         super().__init__(**kwargs)
         self.retries = retries
@@ -112,7 +112,7 @@ class RetryTransport(httpx.HTTPTransport):
 app = typer.Typer(add_completion=False)
 
 
-def fetch_json(client: httpx.Client, url: str, params: dict[str, Any] | None = None, default: Any = None) -> Any:
+def fetch_json(client: httpx.Client, url: str, params: dict[str, Any] | None = None, default: Any = None) -> Any:  # ruff: ignore[any-type]
     try:
         response = client.get(url, params=params)
         response.raise_for_status()
