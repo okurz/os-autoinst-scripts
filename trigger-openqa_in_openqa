@@ -139,7 +139,7 @@ create_devel_openqa_snapshot() {
             delete_packages_from_obs_project "$staging_project"
             return
         fi
-        dst_rev=$(last_revision "$dst_project" "$package")
+        dst_rev=$(last_revision "$dst_project" "$package" "$dst_project")
         log-info "Last revision for '$dst_project/$package': $dst_rev"
         debug_osc co --server-side-source-service-files "$src_project"/"$package"
         sync_changesrevision "$src_project" "$package" "$dst_rev"
