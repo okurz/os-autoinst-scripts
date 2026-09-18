@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[any-type, blind-except, complex-structure, line-too-long, future-required-type-annotation, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, magic-value-comparison, print, error-instead-of-exception]
+# ruff: file-ignore[any-type, blind-except, complex-structure, line-too-long, future-required-type-annotation, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, magic-value-comparison, print]
 """Investigates an openQA job failure using an LLM."""
 
 import datetime
@@ -151,7 +151,7 @@ def post_comment(base_url: str, job_id: str, comment: str) -> None:
         res = subprocess.run(cmd, check=True, capture_output=True, text=True)
         log.debug("Posted comment to %s/t%s: %s", base_url, job_id, res.stdout)
     except subprocess.CalledProcessError as e:
-        log.error("Failed to post comment: %s", e.stderr)
+        log.exception("Failed to post comment: %s", e.stderr)
 
 
 def setup_logging(verbose: int, quiet: bool) -> None:
@@ -203,16 +203,16 @@ def _call_llm_api(
         res_json = res.json()
         return res_json["choices"][0]["message"]["content"]
     except httpx.ConnectError:
-        log.error(
+        log.exception(
             "Could not connect to LLM server at %s. Please check if the server is running or the LLM_API_URL environment variable is correct.",
             llm_url,
         )
         sys.exit(1)
     except httpx.HTTPStatusError as e:
-        log.error("LLM API %s (%s) status %d: %s", llm_url, llm_model, e.response.status_code, e.response.text)
+        log.exception("LLM API %s (%s) status %d: %s", llm_url, llm_model, e.response.status_code, e.response.text)
         sys.exit(1)
-    except Exception as e:
-        log.error("LLM API %s (%s) failed: %s", llm_url, llm_model, e)
+    except Exception:
+        log.exception("LLM API %s (%s) failed", llm_url, llm_model)
         sys.exit(1)
 
 
@@ -347,8 +347,8 @@ Provide exactly 3 sentences answering:
     if prompt_template_file:
         try:
             prompt_template = pathlib.Path(prompt_template_file).read_text(encoding="utf-8")
-        except OSError as e:
-            log.error("Could not read prompt template file %s: %s", prompt_template_file, e)
+        except OSError:
+            log.exception("Could not read prompt template file %s", prompt_template_file)
             sys.exit(1)
     else:
         prompt_template = default_prompt_template
