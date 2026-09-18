@@ -191,6 +191,7 @@ def _perform_investigation(
     llm_url: str,
     llm_model: str,
     timeout: int,
+    llm_token: str | None,
 ) -> None:
     # Check for existing LLM investigation comments
     comments = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}/comments", default=[])
@@ -306,8 +307,10 @@ Provide exactly 3 sentences answering:
         "temperature": 0.3,
     }
 
+    headers = {"Authorization": f"Bearer {llm_token}"} if llm_token else {}
+
     try:
-        res = client.post(llm_url, json=req, timeout=timeout)
+        res = client.post(llm_url, json=req, headers=headers, timeout=timeout)
         res.raise_for_status()
         res_json = res.json()
         llm_response = res_json["choices"][0]["message"]["content"]
@@ -367,10 +370,11 @@ def investigate(
 
     llm_url = os.environ.get("LLM_API_URL", "http://localhost:8080/v1/chat/completions")
     llm_model = os.environ.get("LLM_MODEL", "gemma-4-26B-A4B-it")
+    llm_token = os.environ.get("LLM_API_TOKEN")
 
     transport = RetryTransport(retries=retries)
     with httpx.Client(transport=transport, headers={"User-Agent": USER_AGENT}) as client:
-        _perform_investigation(client, base_url, job_id, force, dry, llm_url, llm_model, timeout)
+        _perform_investigation(client, base_url, job_id, force, dry, llm_url, llm_model, timeout, llm_token)
 
 
 if __name__ == "__main__":

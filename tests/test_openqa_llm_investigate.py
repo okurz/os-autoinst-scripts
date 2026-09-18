@@ -157,6 +157,19 @@ def test_investigate_cmd(mocker: MockerFixture) -> None:
     assert "BISECT: YES" in mock_post.call_args[0][2]
 
 
+def test_investigate_cmd_with_token(mocker: MockerFixture) -> None:
+    mock_post = mocker.patch("llm_investigate.post_comment")
+    mocker.patch("builtins.print")
+    mocker.patch.dict("os.environ", {"LLM_API_TOKEN": "my-secret-token"})
+    client = setup_mock_client(mocker)
+
+    llm_investigate.investigate("123")
+
+    client.post.assert_called_once()
+    assert client.post.call_args[1]["headers"] == {"Authorization": "Bearer my-secret-token"}
+    mock_post.assert_called_once()
+
+
 def test_investigate_cmd_passed_job(mocker: MockerFixture) -> None:
     mock_print = mocker.patch("builtins.print")
     setup_mock_client(mocker, overrides={"api/v1/jobs": {"job": {"id": 123, "result": "passed"}}})
