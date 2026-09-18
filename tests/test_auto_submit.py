@@ -45,7 +45,9 @@ def test_is_transient_osc_error() -> None:
 def test_get_obs_sr_id(mocker: MockerFixture) -> None:
     mock_run = mocker.patch("auto_submit.run_osc_cmd")
     mock_run.return_value = subprocess.CompletedProcess(
-        ["osc"], 0, stdout='<collection><request id="42"/></collection>'
+        ["osc"],
+        0,
+        stdout='<collection><request id="42"/></collection>',
     )
     res = auto_submit.get_obs_sr_id("openSUSE:Factory", "proj", "pkg", "osc", dry_run=False)
     assert res == "42"
@@ -71,12 +73,12 @@ def test_get_obs_sr_id_empty(mocker: MockerFixture) -> None:
             [
                 {
                     "updated_at": (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=2)).strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
+                        "%Y-%m-%dT%H:%M:%SZ",
                     ),
                     "html_url": "https://foo/bar",
                     "user": {"login": "os-autoinst-obs-workflow"},
                     "base": {"ref": "leap-16.0"},
-                }
+                },
             ],
             "",
             True,
@@ -87,12 +89,12 @@ def test_get_obs_sr_id_empty(mocker: MockerFixture) -> None:
             [
                 {
                     "updated_at": (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=2)).strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
+                        "%Y-%m-%dT%H:%M:%SZ",
                     ),
                     "html_url": "https://foo/bar",
                     "user": {"login": "os-autoinst-obs-workflow"},
                     "base": {"ref": "leap-16.0"},
-                }
+                },
             ],
             "",
             False,
@@ -160,7 +162,9 @@ def test_make_obs_submit_request_success(mocker: MockerFixture) -> None:
     res = submitter.make_obs_submit_request("pkg", "Factory", "3.14")
     assert res is True
     mock_run.assert_called_once_with(
-        ["osc", "sr", "-s", "23", "-m", "Update to 3.14", "dst", "pkg", "Factory"], dry_run=False, mutating=True
+        ["osc", "sr", "-s", "23", "-m", "Update to 3.14", "dst", "pkg", "Factory"],
+        dry_run=False,
+        mutating=True,
     )
 
 
@@ -175,7 +179,9 @@ def test_make_obs_submit_request_new(mocker: MockerFixture) -> None:
     res = submitter.make_obs_submit_request("pkg", "Factory", "3.14")
     assert res is True
     mock_run.assert_called_once_with(
-        ["osc", "sr", "-m", "Update to 3.14", "dst", "pkg", "Factory"], dry_run=False, mutating=True
+        ["osc", "sr", "-m", "Update to 3.14", "dst", "pkg", "Factory"],
+        dry_run=False,
+        mutating=True,
     )
 
 
@@ -193,14 +199,19 @@ def test_make_obs_submit_request_failure(mocker: MockerFixture) -> None:
 
 def test_last_revision(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO)
-    sha = 'c0f8ee6a233ed250dbc54c19dee50118'
+    sha = "c0f8ee6a233ed250dbc54c19dee50118"
     mock_run = mocker.patch("auto_submit.run_osc_cmd")
     mock_run.return_value = subprocess.CompletedProcess(
-        ["osc"], 0, stdout=f"* Update to version 162312.{sha}:\n  * fix: foo\n  * feat: bar\n  * perf: boo\n"
+        ["osc"],
+        0,
+        stdout=f"* Update to version 162312.{sha}:\n  * fix: foo\n  * feat: bar\n  * perf: boo\n",
     )
     res = auto_submit.last_revision("proj", "pkg", "Factory", "osc")
     assert res == sha
-    assert re.search(r"First 4 lines of 'proj/pkg/_service:obs_scm:pkg.changes'", caplog.records[0].getMessage()) is not None
+    assert (
+        re.search(r"First 4 lines of 'proj/pkg/_service:obs_scm:pkg.changes'", caplog.records[0].getMessage())
+        is not None
+    )
 
     assert caplog.records[1].getMessage() == f"Last revision for 'proj/pkg': {sha}"
 
@@ -296,7 +307,12 @@ def test_run_submissions_force(mocker: MockerFixture) -> None:
     )
 
     mock_unlink.assert_called_once()
-    mock_run.assert_any_call(["cleanup-obs-project", "devel:openQA:testing", "I am sure"], capture_output=False, text=False, check=True)
+    mock_run.assert_any_call(
+        ["cleanup-obs-project", "devel:openQA:testing", "I am sure"],
+        capture_output=False,
+        text=False,
+        check=True,
+    )
 
 
 def test_run_osc_cmd_error_logging(caplog: pytest.LogCaptureFixture, mocker: MockerFixture) -> None:
@@ -315,7 +331,12 @@ def test_run_osc_cmd_error_logging(caplog: pytest.LogCaptureFixture, mocker: Moc
     assert "Command stderr:\nsome stderr" in messages[0]
 
 
-def test_update_package_no_changes(caplog: pytest.LogCaptureFixture, mocker: MockerFixture, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_update_package_no_changes(
+    caplog: pytest.LogCaptureFixture,
+    mocker: MockerFixture,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     mocker.patch("auto_submit.AutoSubmitter._disable_service_buildtime", return_value="23")
     mocker.patch("auto_submit.AutoSubmitter._cleanup_and_rename_files", return_value="23")
     mocker.patch("auto_submit.AutoSubmitter._find_version", return_value="23")
@@ -341,10 +362,14 @@ def test_update_package_no_changes(caplog: pytest.LogCaptureFixture, mocker: Moc
     assert caplog.records[0].getMessage() == "update_package pkg"
     assert len(caplog.records) == 1
     assert res is False
-    assert (tmp_path / "git-repos" / "pkg" / changes_file).exists
 
 
-def test_update_package(caplog: pytest.LogCaptureFixture, mocker: MockerFixture, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_update_package(
+    caplog: pytest.LogCaptureFixture,
+    mocker: MockerFixture,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     mocker.patch("auto_submit.AutoSubmitter._disable_service_buildtime", return_value="23")
     mocker.patch("auto_submit.AutoSubmitter._cleanup_and_rename_files", return_value="23")
     mocker.patch("auto_submit.AutoSubmitter._find_version", return_value="23")
@@ -380,4 +405,3 @@ def test_update_package(caplog: pytest.LogCaptureFixture, mocker: MockerFixture,
     assert caplog.records[0].getMessage() == "update_package pkg"
     assert caplog.records[1].getMessage() == f"First 2 lines of '{changes_file}':\n{content}"
     assert res is True
-    assert (tmp_path / "git-repos" / "pkg" / changes_file).exists
