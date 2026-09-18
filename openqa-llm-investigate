@@ -115,6 +115,7 @@ app = typer.Typer(add_completion=False)
 
 
 def fetch_json(client: httpx.Client, url: str, params: dict[str, Any] | None = None, default: Any = None) -> Any:  # ruff: ignore[any-type]
+    """Fetch JSON from a URL and return it, or the default if it fails."""
     try:
         response = client.get(url, params=params)
         response.raise_for_status()
@@ -125,6 +126,7 @@ def fetch_json(client: httpx.Client, url: str, params: dict[str, Any] | None = N
 
 
 def fetch_text(client: httpx.Client, url: str, max_lines: int = 200) -> str:
+    """Fetch text from a URL and return up to max_lines lines."""
     try:
         lines: deque[str] = deque(maxlen=max_lines)
         with client.stream("GET", url) as response:
@@ -138,6 +140,7 @@ def fetch_text(client: httpx.Client, url: str, max_lines: int = 200) -> str:
 
 
 def post_comment(base_url: str, job_id: str, comment: str) -> None:
+    """Post a comment to an openQA job."""
     cmd = [
         "openqa-cli",
         "api",
@@ -158,6 +161,7 @@ def post_comment(base_url: str, job_id: str, comment: str) -> None:
 
 
 def setup_logging(verbose: int, *, quiet: bool) -> None:
+    """Configure logging level based on verbosity."""
     if quiet:
         level = logging.ERROR
     elif verbose >= 2:  # ruff: ignore[magic-value-comparison]
@@ -170,6 +174,7 @@ def setup_logging(verbose: int, *, quiet: bool) -> None:
 
 
 def parse_job_url(job_url: str) -> tuple[str, str]:
+    """Parse a job URL or ID into a base URL and job ID."""
     parsed_url = urlparse(job_url)
     if parsed_url.scheme:
         base_url = urlunparse((parsed_url.scheme, parsed_url.netloc, "", "", "", ""))
@@ -181,6 +186,7 @@ def parse_job_url(job_url: str) -> tuple[str, str]:
 
 
 def _shares_failed_modules(other_job: dict[str, Any], target_modules: set[str]) -> bool:
+    """Check if the given job has failures in any of the target modules."""
     """Check if the given job has failures in any of the target modules."""
     other_failed = (m.get("name") for m in other_job.get("modules", []) if m.get("result") == "failed")
     return bool(target_modules.intersection(other_failed))
@@ -194,6 +200,7 @@ def _call_llm_api(
     timeout: int,
     prompt: str,
 ) -> str:
+    """Call the LLM API and return the response text."""
     req = {
         "model": llm_model,
         "messages": [{"role": "user", "content": prompt}],
@@ -235,6 +242,7 @@ def _perform_investigation(
     build_failure_threshold: int,
     prompt_template_file: str | None,
 ) -> None:
+    """Perform the LLM investigation."""
     # Check for existing LLM investigation comments
     comments = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}/comments", default=[])
     if not force and any(c.get("text", "").startswith("**LLM Investigation summary:**") for c in comments):
