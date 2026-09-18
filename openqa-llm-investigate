@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[any-type, blind-except, complex-structure, line-too-long, future-required-type-annotation, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, magic-value-comparison, print]
+# ruff: file-ignore[any-type, blind-except, complex-structure, line-too-long, future-required-type-annotation, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, magic-value-comparison]
 """Investigates an openQA job failure using an LLM."""
 
 import datetime
@@ -378,10 +378,10 @@ Provide exactly 3 sentences answering:
     # Print the job URL to stdout ONLY if BISECT: YES is recommended
     # This makes the script act as a gatekeeper, similar to `openqa-label-known-issues`
     if "BISECT: YES" in llm_response.upper():
-        print(f"{base_url}/tests/{job_id}")
+        typer.echo(f"{base_url}/tests/{job_id}")
 
     if dry:
-        print(f"**LLM Investigation summary:**\n\n{llm_response}")
+        typer.echo(f"**LLM Investigation summary:**\n\n{llm_response}")
     else:
         post_comment(base_url, job_id, f"**LLM Investigation summary:**\n\n{llm_response}")
 

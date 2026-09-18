@@ -149,7 +149,7 @@ def setup_mock_client(mocker: MockerFixture, overrides: dict[str, Any] | None = 
 
 def test_investigate_cmd(mocker: MockerFixture) -> None:
     mock_post = mocker.patch("llm_investigate.post_comment")
-    mock_print = mocker.patch("builtins.print")
+    mock_print = mocker.patch("llm_investigate.typer.echo")
     setup_mock_client(mocker)
     llm_investigate.investigate("123")
     mock_print.assert_called_once_with("https://openqa.opensuse.org/tests/123")
@@ -159,7 +159,7 @@ def test_investigate_cmd(mocker: MockerFixture) -> None:
 
 def test_investigate_cmd_with_token(mocker: MockerFixture) -> None:
     mock_post = mocker.patch("llm_investigate.post_comment")
-    mocker.patch("builtins.print")
+    mocker.patch("llm_investigate.typer.echo")
     mocker.patch.dict("os.environ", {"LLM_API_TOKEN": "my-secret-token"})
     client = setup_mock_client(mocker)
 
@@ -171,7 +171,7 @@ def test_investigate_cmd_with_token(mocker: MockerFixture) -> None:
 
 
 def test_investigate_cmd_passed_job(mocker: MockerFixture) -> None:
-    mock_print = mocker.patch("builtins.print")
+    mock_print = mocker.patch("llm_investigate.typer.echo")
     setup_mock_client(mocker, overrides={"api/v1/jobs": {"job": {"id": 123, "result": "passed"}}})
 
     with pytest.raises(SystemExit) as exc:
@@ -182,7 +182,7 @@ def test_investigate_cmd_passed_job(mocker: MockerFixture) -> None:
 
 
 def test_investigate_cmd_softfailed_job(mocker: MockerFixture) -> None:
-    mock_print = mocker.patch("builtins.print")
+    mock_print = mocker.patch("llm_investigate.typer.echo")
     setup_mock_client(mocker, overrides={"api/v1/jobs": {"job": {"id": 123, "result": "softfailed"}}})
 
     with pytest.raises(SystemExit) as exc:
@@ -206,7 +206,7 @@ def test_investigate_cmd_already_commented(mocker: MockerFixture) -> None:
 
 def test_investigate_cmd_already_commented_with_force(mocker: MockerFixture) -> None:
     mock_post = mocker.patch("llm_investigate.post_comment")
-    mock_print = mocker.patch("builtins.print")
+    mock_print = mocker.patch("llm_investigate.typer.echo")
     setup_mock_client(mocker, overrides={"comments": [{"text": "**LLM Investigation summary:** already done"}]})
 
     llm_investigate.investigate("123", force=True)
@@ -218,7 +218,7 @@ def test_investigate_cmd_already_commented_with_force(mocker: MockerFixture) -> 
 
 def test_investigate_cmd_dry_run(mocker: MockerFixture) -> None:
     mock_post = mocker.patch("llm_investigate.post_comment")
-    mock_print = mocker.patch("builtins.print")
+    mock_print = mocker.patch("llm_investigate.typer.echo")
     client = setup_mock_client(mocker)
     client.post.side_effect = lambda *_, **__: Mock(
         json=Mock(return_value={"choices": [{"message": {"content": "BISECT: NO. Already known."}}]})
