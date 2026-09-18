@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[complex-structure, line-too-long, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
+# ruff: file-ignore[complex-structure, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
 """Investigates an openQA job failure using an LLM."""
 
 from __future__ import annotations
@@ -214,7 +214,10 @@ def _call_llm_api(
         return res_json["choices"][0]["message"]["content"]
     except httpx.ConnectError:
         log.exception(
-            "Could not connect to LLM server at %s. Please check if the server is running or the LLM_API_URL environment variable is correct.",
+            (
+                "Could not connect to LLM server at %s. Please check if the server is running or the "
+                "LLM_API_URL environment variable is correct."
+            ),
             llm_url,
         )
         sys.exit(1)
@@ -320,7 +323,10 @@ def _perform_investigation(
 
     hint = ""
     if build_failures > build_failure_threshold:
-        hint = f"\n(Note: {build_failures} failures across this build strongly implies a backend infrastructure outage or a widespread environment issue rather than a specific product bug.)"
+        hint = (
+            f"\n(Note: {build_failures} failures across this build strongly implies a backend "
+            "infrastructure outage or a widespread environment issue rather than a specific product bug.)"
+        )
 
     prompt_extension = settings.get("LLM_PROMPT_EXTENSION")
     prompt_extension_text = (
@@ -351,9 +357,13 @@ Log tail (last {log_lines} lines):
 Provide exactly 3 sentences answering:
 1. Is it a new or existing issue? Is it likely a product regression, test regression, or infrastructure problem?
 2. Does the same issue appear in other tests in the same build, and did it appear in the history of the same build?
-3. Should 'openqa-investigate' be triggered to schedule further bisect tests? Start your 3rd sentence EXACTLY with "BISECT: YES" or "BISECT: NO" followed by the reason.
-   - If other jobs in the same build are failing in the exact same module, this is a widespread issue. You MUST answer BISECT: NO to prevent redundant and costly bisections, as another job has likely already triggered it.
-   - If the failure is isolated to ONLY this job in the current build, AND the log contains an explicit product error or test assertion failure (e.g., 'actual size fits X: fail', 'command not found', 'segmentation fault'), it strongly points to a new regression. In this isolated case, you MUST answer BISECT: YES.
+3. Should 'openqa-investigate' be triggered to schedule further bisect tests? Start your 3rd sentence EXACTLY with \
+"BISECT: YES" or "BISECT: NO" followed by the reason.
+   - If other jobs in the same build are failing in the exact same module, this is a widespread issue. You MUST \
+answer BISECT: NO to prevent redundant and costly bisections, as another job has likely already triggered it.
+   - If the failure is isolated to ONLY this job in the current build, AND the log contains an explicit product \
+error or test assertion failure (e.g., 'actual size fits X: fail', 'command not found', 'segmentation fault'), \
+it strongly points to a new regression. In this isolated case, you MUST answer BISECT: YES.
 """
 
     if prompt_template_file:
@@ -452,6 +462,7 @@ def investigate(
         ),
     ] = os.environ.get("LLM_PROMPT_TEMPLATE_FILE"),
 ) -> None:
+    """CLI entry point to investigate a failed openQA job."""
     setup_logging(verbose, quiet=quiet)
     base_url, job_id = parse_job_url(job_url)
 
