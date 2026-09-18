@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[any-type, complex-structure, line-too-long, future-required-type-annotation, boolean-type-hint-positional-argument, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
+# ruff: file-ignore[any-type, complex-structure, line-too-long, future-required-type-annotation, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
 """Investigates an openQA job failure using an LLM."""
 
 import datetime
@@ -155,7 +155,7 @@ def post_comment(base_url: str, job_id: str, comment: str) -> None:
         log.exception("Failed to post comment: %s", e.stderr)
 
 
-def setup_logging(verbose: int, quiet: bool) -> None:
+def setup_logging(verbose: int, *, quiet: bool) -> None:
     if quiet:
         level = logging.ERROR
     elif verbose >= 2:  # ruff: ignore[magic-value-comparison]
@@ -221,6 +221,7 @@ def _perform_investigation(
     client: httpx.Client,
     base_url: str,
     job_id: str,
+    *,
     force: bool,
     dry: bool,
     llm_url: str,
@@ -441,7 +442,7 @@ def investigate(
         ),
     ] = os.environ.get("LLM_PROMPT_TEMPLATE_FILE"),
 ) -> None:
-    setup_logging(verbose, quiet)
+    setup_logging(verbose, quiet=quiet)
     base_url, job_id = parse_job_url(job_url)
 
     if not job_id.isdigit():
@@ -454,16 +455,16 @@ def investigate(
             client,
             base_url,
             job_id,
-            force,
-            dry,
-            llm_url,
-            llm_model,
-            timeout,
-            llm_token,
-            log_lines,
-            history_limit,
-            build_failure_threshold,
-            prompt_template_file,
+            force=force,
+            dry=dry,
+            llm_url=llm_url,
+            llm_model=llm_model,
+            timeout=timeout,
+            llm_token=llm_token,
+            log_lines=log_lines,
+            history_limit=history_limit,
+            build_failure_threshold=build_failure_threshold,
+            prompt_template_file=prompt_template_file,
         )
 
 
