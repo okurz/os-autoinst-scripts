@@ -191,6 +191,7 @@ def _perform_investigation(
     llm_url: str,
     llm_model: str,
     timeout: int,
+    llm_token: str | None,
 ) -> None:
     # Check for existing LLM investigation comments
     comments = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}/comments", default=[])
@@ -306,8 +307,10 @@ Provide exactly 3 sentences answering:
         "temperature": 0.3,
     }
 
+    headers = {"Authorization": f"Bearer {llm_token}"} if llm_token else {}
+
     try:
-        res = client.post(llm_url, json=req, timeout=timeout)
+        res = client.post(llm_url, json=req, headers=headers, timeout=timeout)
         res.raise_for_status()
         res_json = res.json()
         llm_response = res_json["choices"][0]["message"]["content"]
@@ -357,6 +360,15 @@ def investigate(
     retries: Annotated[int, typer.Option("--retries", help="Number of retries on retry-worthy HTTP responses")] = int(
         os.environ.get("LLM_RETRIES", "7")
     ),
+    llm_url: Annotated[
+        str, typer.Option("--llm-url", envvar="LLM_API_URL", help="URL for the LLM API endpoint")
+    ] = os.environ.get("LLM_API_URL", "http://localhost:8080/v1/chat/completions"),
+    llm_model: Annotated[
+        str, typer.Option("--llm-model", envvar="LLM_MODEL", help="The LLM model to use")
+    ] = os.environ.get("LLM_MODEL", "gemma-4-26B-A4B-it"),
+    llm_token: Annotated[
+        str | None, typer.Option("--llm-token", envvar="LLM_API_TOKEN", help="API token for authentication")
+    ] = os.environ.get("LLM_API_TOKEN"),
 ) -> None:
     setup_logging(verbose, quiet)
     base_url, job_id = parse_job_url(job_url)
@@ -365,12 +377,9 @@ def investigate(
         log.error("Invalid job ID: %s", job_id)
         sys.exit(1)
 
-    llm_url = os.environ.get("LLM_API_URL", "http://localhost:8080/v1/chat/completions")
-    llm_model = os.environ.get("LLM_MODEL", "gemma-4-26B-A4B-it")
-
     transport = RetryTransport(retries=retries)
     with httpx.Client(transport=transport, headers={"User-Agent": USER_AGENT}) as client:
-        _perform_investigation(client, base_url, job_id, force, dry, llm_url, llm_model, timeout)
+        _perform_investigation(client, base_url, job_id, force, dry, llm_url, llm_model, timeout, llm_token)
 
 
 if __name__ == "__main__":
