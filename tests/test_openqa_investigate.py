@@ -615,7 +615,14 @@ def test_sync_via_investigation_comment(mocker: MockerFixture) -> None:
     with pytest.raises(typer.Exit) as exc:
         openqa_investigate.sync_via_investigation_comment(client, 1, 1)
     assert exc.value.exit_code == 0
-    mock_del.assert_called_once_with(1, 100)
+    mock_del.assert_called_with(1, 100)
+
+    # Comment ID does not match first comment ID, but force=True -> skips deletion, returns comment ID
+    with pytest.raises(typer.Exit) as exc:
+        openqa_investigate.sync_via_investigation_comment(client, 1, 1, force=False)
+    assert exc.value.exit_code == 0
+
+    assert openqa_investigate.sync_via_investigation_comment(client, 1, 1, force=True) == "100"
 
 
 def test_finalize_investigation_comment(mocker: MockerFixture) -> None:

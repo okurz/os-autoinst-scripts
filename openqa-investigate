@@ -278,7 +278,9 @@ def query_dependency_data_or_postpone(client: OpenQAClient, job_id: int) -> dict
     return dep_data
 
 
-def sync_via_investigation_comment(client: OpenQAClient, job_id: int, first_cluster_job_id: int) -> str | None:
+def sync_via_investigation_comment(
+    client: OpenQAClient, job_id: int, first_cluster_job_id: int, *, force: bool = False
+) -> str | None:
     """Synchronize investigation start via comment."""
     if client.dry_run:
         return None
@@ -296,7 +298,7 @@ def sync_via_investigation_comment(client: OpenQAClient, job_id: int, first_clus
 
     first_comment_id = min(int(c["id"]) for c in inv_comments if "id" in c)
 
-    if comment_id != first_comment_id:
+    if comment_id != first_comment_id and not force:
         _print(
             f"Skipping investigation of job {job_id}: job cluster is already being investigated, "
             f"see comment on job {first_cluster_job_id}",
@@ -830,7 +832,7 @@ def run_investigation_logic(  # ruff: ignore[too-many-branches, too-many-argumen
     ):
         return
 
-    comment_id_str = sync_via_investigation_comment(client, job_id, first_cluster_job_id)
+    comment_id_str = sync_via_investigation_comment(client, job_id, first_cluster_job_id, force=force)
 
     try:
         out = trigger_jobs(client, job_id, extra_settings, investigation_gid, prio_add)
