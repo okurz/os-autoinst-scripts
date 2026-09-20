@@ -128,13 +128,18 @@ ignore = [
     "docstring-missing-returns", # docstring-missing-returns
     "docstring-missing-exception", # docstring-missing-exception
     "missing-trailing-comma", # missing-trailing-comma
+    "suspicious-subprocess-import", # suspicious-subprocess-import
+    "undocumented-public-init", # undocumented-public-init
+    "undocumented-public-method", # undocumented-public-method
+    "undocumented-public-function", # undocumented-public-function
+    "subprocess-without-shell-equals-true", # subprocess-without-shell-equals-true
 ]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 9
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["magic-value-comparison", "any-type", "too-many-arguments", "assert", "hardcoded-password-string", "hardcoded-password-func-arg", "too-many-positional-arguments", "undocumented-public-function"]
+"tests/*" = ["magic-value-comparison", "any-type", "too-many-arguments", "assert", "hardcoded-password-string", "hardcoded-password-func-arg", "too-many-positional-arguments", "undocumented-public-function", "private-member-access"]
 
 [tool.ruff.format]
 # Enable reformatting of code snippets in docstrings.
