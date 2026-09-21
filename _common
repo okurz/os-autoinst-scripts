@@ -388,9 +388,10 @@ last_revision() {
     log-debug "last_revision $*"
     local project=$1
     local package=$2
+    local target=${3:-$submit_target}
     local file=$package.changes
     local service=obs_scm
-    if [[ $project != "$submit_target" ]]; then
+    if [[ $project != "$target" ]]; then
         file=_service:$service:$file
     fi
     local line
