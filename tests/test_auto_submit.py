@@ -293,6 +293,7 @@ def test_run_submissions_force(mocker: MockerFixture) -> None:
         throttle_days_leap_16=7,
         git_user="user",
         submit_target_extra="none",
+        packages=None,
     )
 
     mock_unlink.assert_called_once()

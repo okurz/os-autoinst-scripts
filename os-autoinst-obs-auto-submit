@@ -829,6 +829,7 @@ def _run_submissions(  # ruff: ignore[complex-structure, too-many-branches, too-
     throttle_days_leap_16: int,
     git_user: str,
     submit_target_extra: str,
+    packages: str,
 ) -> None:
     """Run package submissions with the defined configuration."""
     if not dst_project:
@@ -879,7 +880,10 @@ def _run_submissions(  # ruff: ignore[complex-structure, too-many-branches, too-
     original_dir = pathlib.Path.cwd().resolve()
 
     # Determine packages to submit
-    auto_submit_packages = _get_packages_to_submit(dst_project, osc_cmd_str, dry_run=dry_run)
+    if packages and packages != "none":
+        auto_submit_packages = packages.split(",")
+    else:
+        auto_submit_packages = _get_packages_to_submit(dst_project, osc_cmd_str, dry_run=dry_run)
 
     # Submit packages using TMPDIR
     must_cleanup_staging = False
@@ -964,6 +968,7 @@ def main(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     submit_target_extra: Annotated[
         str, typer.Option(envvar="submit_target_extra")
     ] = "openSUSE:Backports:SLE-15-SP7:Update,openSUSE:Leap:16.0",
+    packages: Annotated[str, typer.Option(envvar="packages")] = None,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
     quiet: Annotated[int, typer.Option("--quiet", "-V", count=True)] = 0,
     force: Annotated[bool, typer.Option("--force", "-f", envvar="force")] = False,  # ruff: ignore[boolean-default-value-positional-argument]
@@ -992,6 +997,7 @@ def main(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         throttle_days_leap_16=throttle_days_leap_16,
         git_user=git_user,
         submit_target_extra=submit_target_extra,
+        packages=packages,
     )
 
 
