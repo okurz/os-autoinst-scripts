@@ -165,6 +165,8 @@ def test_monitor_single_job(
 )
 def test_main_flow(
     mocker: MockerFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
     job_res: tuple[int, str, str],
     pkg_name: str,
     comment_obs: str,
@@ -172,6 +174,7 @@ def test_main_flow(
     expected_exit: int,
     expected_skip_reason: str,
 ) -> None:
+    monkeypatch.chdir(tmp_path)
     mocker.patch("monitor_job.load_job_ids", return_value=[1])
     mocker.patch("monitor_job.monitor_single_job", return_value=job_res)
     mocker.patch("monitor_job.delete_packages_from_obs_project")
