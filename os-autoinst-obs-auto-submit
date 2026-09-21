@@ -609,6 +609,8 @@ class AutoSubmitter:
         ci_cmd = [*shlex.split(self.osc_cmd_str), "ci", "-m", f"Offline generation of {version}", *ci_args]
         run_osc_cmd(ci_cmd, dry_run=self.dry_run, mutating=True)
 
+        if self.skip_wait_for_build:
+            return True
         return self.wait_for_package_build(self.submit_target, package)
 
     @staticmethod
@@ -830,6 +832,7 @@ def _run_submissions(  # ruff: ignore[complex-structure, too-many-branches, too-
     git_user: str,
     submit_target_extra: str,
     packages: str,
+    skip_wait_for_build: bool,
 ) -> None:
     """Run package submissions with the defined configuration."""
     if not dst_project:
@@ -892,7 +895,6 @@ def _run_submissions(  # ruff: ignore[complex-structure, too-many-branches, too-
         actual_src_project = staging_project
         must_cleanup_staging = True
 
-
     with tempfile.TemporaryDirectory(prefix="os-autoinst-obs-auto-submit-", dir=tmpdir_base) as tmpdir_path:
         submitter = AutoSubmitter(
             dir=pathlib.Path(tmpdir_path),
@@ -911,6 +913,7 @@ def _run_submissions(  # ruff: ignore[complex-structure, too-many-branches, too-
             git_obs_cmd_str=git_obs_cmd_str,
             git_obs_no_retry_cmd_str=git_obs_no_retry_cmd_str,
             targets=targets,
+            skip_wait_for_build=skip_wait_for_build,
         )
 
         rc = 0
@@ -969,6 +972,7 @@ def main(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         str, typer.Option(envvar="submit_target_extra")
     ] = "openSUSE:Backports:SLE-15-SP7:Update,openSUSE:Leap:16.0",
     packages: Annotated[str, typer.Option(envvar="packages")] = None,
+    skip_wait_for_build: Annotated[bool, typer.Option(envvar="skip_wait_for_build")] = False,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
     quiet: Annotated[int, typer.Option("--quiet", "-V", count=True)] = 0,
     force: Annotated[bool, typer.Option("--force", "-f", envvar="force")] = False,  # ruff: ignore[boolean-default-value-positional-argument]
@@ -998,6 +1002,7 @@ def main(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         git_user=git_user,
         submit_target_extra=submit_target_extra,
         packages=packages,
+        skip_wait_for_build=skip_wait_for_build,
     )
 
 

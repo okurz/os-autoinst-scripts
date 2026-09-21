@@ -294,6 +294,7 @@ def test_run_submissions_force(mocker: MockerFixture) -> None:
         git_user="user",
         submit_target_extra="none",
         packages=None,
+        skip_wait_for_build=False
     )
 
     mock_unlink.assert_called_once()
