@@ -52,34 +52,31 @@ def test_setup_logging(mocker: MockerFixture, verbose_count: int, expected_level
 
 
 @pytest.mark.parametrize(
-    ("job_id_arg", "default_scheme", "default_host", "expected"),
+    ("job_url_arg", "default_scheme", "default_host", "expected"),
     [
-        ("1234", "https", "openqa.opensuse.org", (1234, "https", "openqa.opensuse.org")),
         ("https://openqa.opensuse.org/tests/1234", "http", "localhost", (1234, "https", "openqa.opensuse.org")),
         ("http://test.host/t5678", "https", "openqa.opensuse.org", (5678, "http", "test.host")),
         ("https://my.openqa.org/tests/9012/", "https", "openqa.opensuse.org", (9012, "https", "my.openqa.org")),
     ],
 )
-def test_parse_job_url_or_id_valid(
-    job_id_arg: str, default_scheme: str, default_host: str, expected: tuple[int, str, str]
+def test_parse_job_url_valid(
+    job_url_arg: str, default_scheme: str, default_host: str, expected: tuple[int, str, str]
 ) -> None:
-    assert openqa_investigate.parse_job_url_or_id(job_id_arg, default_scheme, default_host) == expected
+    assert openqa_investigate.parse_job_url(job_url_arg, default_scheme, default_host) == expected
 
 
 @pytest.mark.parametrize(
-    ("job_id_arg", "default_scheme", "default_host", "match_pattern"),
+    ("job_url_arg", "default_scheme", "default_host", "match_pattern"),
     [
-        ("abc", "https", "openqa.opensuse.org", "Invalid job ID or URL: abc"),
+        ("abc", "https", "openqa.opensuse.org", "Invalid job URL: abc"),
         ("https://openqa.opensuse.org/", "https", "openqa.opensuse.org", "Could not extract job ID from URL path: /"),
         ("https://openqa.opensuse.org/tests/", "https", "openqa.opensuse.org", "Could not extract numeric job ID"),
         ("https://openqa.opensuse.org/tests/abc", "https", "openqa.opensuse.org", "Could not extract numeric job ID"),
     ],
 )
-def test_parse_job_url_or_id_invalid(
-    job_id_arg: str, default_scheme: str, default_host: str, match_pattern: str
-) -> None:
+def test_parse_job_url_invalid(job_url_arg: str, default_scheme: str, default_host: str, match_pattern: str) -> None:
     with pytest.raises(ValueError, match=match_pattern):
-        openqa_investigate.parse_job_url_or_id(job_id_arg, default_scheme, default_host)
+        openqa_investigate.parse_job_url(job_url_arg, default_scheme, default_host)
 
 
 def test_client_init() -> None:
@@ -156,7 +153,7 @@ def test_client_run_openqa_cli_variants(mocker: MockerFixture, caplog: pytest.Lo
 @pytest.mark.parametrize(
     ("method_name", "args", "expected_cli_args"),
     [
-        ("get_job_state", [123], ["--json", "experimental/jobs/123/status"]),
+        ("get_job_status", [123], ["--json", "experimental/jobs/123/status"]),
         ("get_job", [123], ["--json", "jobs/123"]),
         ("get_job_comments", [123], ["--json", "jobs/123/comments"]),
         ("post_job_comment", [123, "hello"], ["-X", "POST", "jobs/123/comments", "text=hello"]),
@@ -179,7 +176,7 @@ def test_client_api_methods(
     else:
         assert res == {"status": "ok"}
 
-    if method_name in {"get_job_state", "get_job", "get_job_comments"}:
+    if method_name in {"get_job_status", "get_job", "get_job_comments"}:
         mock_run.assert_called_once_with(expected_cli_args)
     else:
         mock_run.assert_called_once_with(expected_cli_args, mutate=True)
@@ -189,7 +186,7 @@ def test_client_api_methods_non_dict_fallback(mocker: MockerFixture) -> None:
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
     mocker.patch.object(client, "_run_openqa_cli", return_value=["non-dict"])
 
-    assert client.get_job_state(1) == {}
+    assert client.get_job_status(1) == {}
     assert client.get_job(1) == {}
     assert client.post_job_comment(1, "x") == {}
     assert client.put_job_comment(1, 2, "x") == {}
@@ -261,7 +258,7 @@ def test_client_get_http_variants(mocker: MockerFixture, caplog: pytest.LogCaptu
 
 def test_client_get_dependencies_ajax_fallback(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
-    mocker.patch.object(client, "_get_http", side_effect=Exception("HTTP error"))
+    mocker.patch.object(client, "_get_http", side_effect=httpx.HTTPError("HTTP error"))
     mock_cli = mocker.patch.object(client, "_run_openqa_cli", return_value={"fallback": "ok"})
 
     with caplog.at_level(logging.DEBUG):
@@ -696,7 +693,7 @@ def test_fetch_investigation_results(mocker: MockerFixture) -> None:
         ),
     }
     mocker.patch.object(openqa_investigate, "_find_investigation_comment", return_value=comment)
-    mocker.patch.object(client, "get_job_state", side_effect=[{"state": "scheduled"}])
+    mocker.patch.object(client, "get_job_status", side_effect=[{"state": "scheduled"}])
     with pytest.raises(typer.Exit) as exc:
         openqa_investigate.fetch_investigation_results(client, 1)
     assert exc.value.exit_code == 142
@@ -704,7 +701,7 @@ def test_fetch_investigation_results(mocker: MockerFixture) -> None:
     # Comment with finished sub-jobs
     mocker.patch.object(
         client,
-        "get_job_state",
+        "get_job_status",
         side_effect=[
             {"state": "done", "result": "passed"},
             {"state": "cancelled", "result": "user_cancelled"},

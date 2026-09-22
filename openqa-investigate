@@ -116,75 +116,75 @@ class OpenQAClient:
                     raise
         return {}
 
-    def get_job_state(self, job_id: int | str) -> dict[str, Any]:
+    def get_job_status(self, job_id: int) -> dict[str, Any]:
         args = ["--json", f"experimental/jobs/{job_id}/status"]
         res = self._run_openqa_cli(args)
         if isinstance(res, dict):
             return res
         return {}
 
-    def get_job(self, job_id: int | str) -> dict[str, Any]:
+    def get_job(self, job_id: int) -> dict[str, Any]:
         args = ["--json", f"jobs/{job_id}"]
         res = self._run_openqa_cli(args)
         if isinstance(res, dict):
             return res
         return {}
 
-    def get_job_comments(self, job_id: int | str) -> list[dict[str, Any]]:
+    def get_job_comments(self, job_id: int) -> list[dict[str, Any]]:
         args = ["--json", f"jobs/{job_id}/comments"]
         res = self._run_openqa_cli(args)
         if isinstance(res, list):
             return res
         return []
 
-    def post_job_comment(self, job_id: int | str, text: str) -> dict[str, Any]:
+    def post_job_comment(self, job_id: int, text: str) -> dict[str, Any]:
         args = ["-X", "POST", f"jobs/{job_id}/comments", f"text={text}"]
         res = self._run_openqa_cli(args, mutate=True)
         if isinstance(res, dict):
             return res
         return {}
 
-    def put_job_comment(self, job_id: int | str, comment_id: int | str, text: str) -> dict[str, Any]:
+    def put_job_comment(self, job_id: int, comment_id: int, text: str) -> dict[str, Any]:
         args = ["-X", "PUT", f"jobs/{job_id}/comments/{comment_id}", f"text={text}"]
         res = self._run_openqa_cli(args, mutate=True)
         if isinstance(res, dict):
             return res
         return {}
 
-    def delete_job_comment(self, job_id: int | str, comment_id: int | str) -> dict[str, Any]:
+    def delete_job_comment(self, job_id: int, comment_id: int) -> dict[str, Any]:
         args = ["-X", "DELETE", f"jobs/{job_id}/comments/{comment_id}"]
         res = self._run_openqa_cli(args, mutate=True)
         if isinstance(res, dict):
             return res
         return {}
 
-    def put_job_priority(self, job_id: int | str, priority: int) -> dict[str, Any]:
+    def put_job_priority(self, job_id: int, priority: int) -> dict[str, Any]:
         args = ["--json", "--data", f'{{"priority": {priority}}}', "-X", "PUT", f"jobs/{job_id}"]
         res = self._run_openqa_cli(args, mutate=True)
         if isinstance(res, dict):
             return res
         return {}
 
-    def get_dependencies_ajax(self, job_id: int | str) -> dict[str, Any]:
+    def get_dependencies_ajax(self, job_id: int) -> dict[str, Any]:
         try:
             return self._get_http(f"tests/{job_id}/dependencies_ajax")
-        except Exception:  # ruff: ignore[blind-except]
+        except httpx.HTTPError:
             log.debug("HTTP GET failed, falling back to openqa-cli for dependencies_ajax")
             res = self._run_openqa_cli(["-X", "GET", f"tests/{job_id}/dependencies_ajax"])
             if isinstance(res, dict):
                 return res
             return {}
 
-    def get_investigation_ajax(self, job_id: int | str) -> dict[str, Any]:
+    def get_investigation_ajax(self, job_id: int) -> dict[str, Any]:
         return self._get_http(f"tests/{job_id}/investigation_ajax")
 
-    def get_vars_json(self, job_id: int | str) -> dict[str, Any]:
+    def get_vars_json(self, job_id: int) -> dict[str, Any]:
         return self._get_http(f"tests/{job_id}/file/vars.json")
 
 
 def clone_job(
     host_url: str,
-    job_id: int | str,
+    job_id: int,
     clone_settings: list[str],
     *,
     dry_run: bool = False,
@@ -225,8 +225,8 @@ def clone_job(
     return {"raw_output": stdout}
 
 
-def parse_job_url_or_id(job_id_arg: str, default_scheme: str, default_host: str) -> tuple[int, str, str]:
-    parsed = urlparse(job_id_arg)
+def parse_job_url(job_url: str, default_scheme: str, default_host: str) -> tuple[int, str, str]:
+    parsed = urlparse(job_url)
     if parsed.scheme and parsed.netloc:
         scheme = parsed.scheme
         host = parsed.netloc
@@ -243,9 +243,7 @@ def parse_job_url_or_id(job_id_arg: str, default_scheme: str, default_host: str)
             msg = f"Could not extract numeric job ID from URL path component: {job_str}"
             raise ValueError(msg)
         return job_id, scheme, host
-    if job_id_arg.isdigit():
-        return int(job_id_arg), default_scheme, default_host
-    msg = f"Invalid job ID or URL: {job_id_arg}"
+    msg = f"Invalid job URL: {job_url}"
     raise ValueError(msg)
 
 
@@ -642,13 +640,13 @@ def fetch_investigation_results(client: OpenQAClient, origin_job_id: int) -> lis
             inv_type = match.group(1)
             other_id = int(match.group(2))
 
-            job_state_data = client.get_job_state(other_id)
-            state = job_state_data.get("state")
+            job_status_data = client.get_job_status(other_id)
+            state = job_status_data.get("state")
             if state not in {"done", "cancelled"}:
                 log.warning("Investigation job %s is not finished (state: %s)", other_id, state)
                 raise typer.Exit(code=142)
 
-            result = job_state_data.get("result", "")
+            result = job_status_data.get("result", "")
             results.append((inv_type, other_id, result))
 
     return results
@@ -973,7 +971,12 @@ def main(  # ruff: ignore[too-many-arguments]
     setup_logging(verbose)
 
     try:
-        parsed_id, parsed_scheme, parsed_host = parse_job_url_or_id(job_id, scheme, host)
+        if job_id.isdigit():
+            parsed_id = int(job_id)
+            parsed_scheme = scheme
+            parsed_host = host
+        else:
+            parsed_id, parsed_scheme, parsed_host = parse_job_url(job_id, scheme, host)
     except ValueError as e:
         log.error("Error parsing job ID or URL: %s", e)
         raise typer.Exit(code=1) from e
