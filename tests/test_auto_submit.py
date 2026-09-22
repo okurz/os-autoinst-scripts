@@ -362,6 +362,7 @@ def test_update_package_no_changes(
     assert caplog.records[0].getMessage() == "update_package pkg"
     assert len(caplog.records) == 1
     assert res is False
+    assert not (tmp_path / "git-repos" / "pkg" / changes_file).exists()
 
 
 def test_update_package(
