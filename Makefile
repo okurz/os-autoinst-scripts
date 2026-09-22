@@ -57,7 +57,11 @@ checkstyle: test-shellcheck test-yaml checkstyle-python check-code-health test-g
 shfmt: ## Format shell scripts
 	shfmt -w ${SH_FILES}
 
-test-shellcheck: ## Run shell script checks
+.PHONY: check-file-command
+check-file-command:
+	@command -v file >/dev/null 2>&1 || (echo "Error: 'file' command is not installed. It is required to detect script languages." && false)
+
+test-shellcheck: check-file-command ## Run shell script checks
 	@which shfmt >/dev/null 2>&1 || echo "Command 'shfmt' not found, can not execute shell script formating checks"
 	shfmt -d ${SH_FILES}
 	@which shellcheck >/dev/null 2>&1 || echo "Command 'shellcheck' not found, can not execute shell script checks"
@@ -69,7 +73,7 @@ test-yaml: ## Run YAML syntax checks
 
 .PHONY: checkstyle-python
 checkstyle-python: check-ruff check-conventions check-ty ## Run python style checks
-check-ruff: ## Run python style checks with ruff
+check-ruff: check-file-command ## Run python style checks with ruff
 	@which ruff >/dev/null 2>&1 || echo "Command 'ruff' not found, can not execute python style checks"
 	@if [ -n "$(PY_FILES)" ]; then $(PYTHON_RUN) ruff format --check $(PY_FILES) && $(PYTHON_RUN) ruff check $(PY_FILES); fi
 
@@ -104,7 +108,7 @@ test-gitlint: ## Run commit message checks using gitlint
 	gitlint --commits "$$BASE..HEAD"
 
 .PHONY: tidy
-tidy: ## Format code and fix linting issues
+tidy: check-file-command ## Format code and fix linting issues
 	$(PYTHON_RUN) ruff format $(PY_FILES)
 	$(PYTHON_RUN) ruff check --fix $(PY_FILES)
 
