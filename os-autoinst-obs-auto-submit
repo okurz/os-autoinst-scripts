@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
+# ruff: file-ignore[boolean-type-hint-positional-argument, boolean-default-value-positional-argument]
 
 
 """Prepare and submit os-autoinst packages to target projects like openSUSE:Factory."""
@@ -73,10 +74,13 @@ def _run_subprocess(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     else:
         return res
 
-def _run_cmd(cmd: list[str], capture_output=False, text=False, check=False) -> subprocess.CompletedProcess[str]:
+
+def _run_cmd(
+    cmd: list[str], capture_output: bool = False, text: bool = False, check: bool = False
+) -> subprocess.CompletedProcess[str]:
     log.info("[cmd] %s", " ".join(cmd))
-    res = subprocess.run(cmd, capture_output=capture_output, text=text, check=check)  # ruff: ignore[subprocess-without-shell-equals-true]
-    return res
+    return subprocess.run(cmd, capture_output=capture_output, text=text, check=check)  # ruff: ignore[subprocess-without-shell-equals-true]
+
 
 def run_osc_cmd(cmd: list[str], *, dry_run: bool = False, mutating: bool = False) -> subprocess.CompletedProcess[str]:
     """Run an osc command with retry logic."""
@@ -126,7 +130,7 @@ def get_obs_sr_id(target: str, dst_project: str, package: str, osc_cmd_str: str,
     return ""
 
 
-def _log_head(file: str, content: str, num: int):
+def _log_head(file: str, content: str, num: int) -> None:
     lines = content.splitlines()
     preview = "\n".join(lines[:num])
     log.info("First %d lines of '%s':\n%s", min(num, len(lines)), file, preview)
@@ -140,6 +144,7 @@ def last_revision(project: str, package: str, submit_target: str, osc_cmd_str: s
         filename = f"_service:obs_scm:{filename}"
 
     cmd = [*shlex.split(osc_cmd_str), "cat", f"{project}/{package}/{filename}"]
+    # ruff: ignore[too-many-statements-in-try-clause]
     try:
         res = run_osc_cmd(cmd)
         _log_head(f"{project}/{package}/{filename}", res.stdout, 50)
@@ -147,7 +152,7 @@ def last_revision(project: str, package: str, submit_target: str, osc_cmd_str: s
             if "Update to version" in line:
                 match = re.search(r"\.([^.:]+):$", line)
                 if match:
-                    log.info("Last revision for '%s/%s': %s", project, package, match.group(1));
+                    log.info("Last revision for '%s/%s': %s", project, package, match.group(1))
                     return match.group(1)
     except subprocess.CalledProcessError as e:
         log.warning("osc cat failed for last_revision: %s", e)
@@ -334,8 +339,8 @@ class AutoSubmitter:
             log.error("Forked repository name not found in fork command output.")
             return ""
 
-        if os.path.exists(package):
-            log.info("Directory %s already exists, not cloning", package);
+        if pathlib.Path(package).exists():
+            log.info("Directory %s already exists, not cloning", package)
             return forked_repo
 
         clone_cmd = [*git_obs_cmd, "repo", "clone", "--no-ssh-strict-host-key-checking", forked_repo]
@@ -368,7 +373,7 @@ class AutoSubmitter:
             # Delete and replace every file that we have just generated.
             # Keep special files that only exist in the git tree.
             for item in pathlib.Path().iterdir():
-                if item.name in (".git", ".gitignore", ".gitattributes"):
+                if item.name in {".git", ".gitignore", ".gitattributes"}:
                     continue
                 if item.is_dir():
                     shutil.rmtree(item)
@@ -955,7 +960,7 @@ def main(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     dst_project: Annotated[str, typer.Option(envvar="dst_project")] = "",
     staging_project: Annotated[str, typer.Option(envvar="staging_project")] = "",
     submit_target: Annotated[str, typer.Option(envvar="submit_target")] = "openSUSE:Factory",
-    dry_run: Annotated[bool, typer.Option(envvar="dry_run")] = False,  # ruff: ignore[boolean-default-value-positional-argument]
+    dry_run: Annotated[bool, typer.Option(envvar="dry_run")] = False,
     osc_poll_interval: Annotated[int, typer.Option(envvar="osc_poll_interval")] = 2,
     osc_build_start_poll_tries: Annotated[int, typer.Option(envvar="osc_build_start_poll_tries")] = 90,
     throttle_days: Annotated[int, typer.Option(envvar="throttle_days")] = 2,
@@ -966,7 +971,7 @@ def main(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     ] = "openSUSE:Backports:SLE-15-SP7:Update,openSUSE:Leap:16.0",
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
     quiet: Annotated[int, typer.Option("--quiet", "-V", count=True)] = 0,
-    force: Annotated[bool, typer.Option("--force", "-f", envvar="force")] = False,  # ruff: ignore[boolean-default-value-positional-argument]
+    force: Annotated[bool, typer.Option("--force", "-f", envvar="force")] = False,
 ) -> None:
     """Prepare and submit os-autoinst packages to target projects like openSUSE:Factory.
 
