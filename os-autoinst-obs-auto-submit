@@ -893,7 +893,6 @@ def _run_submissions(  # ruff: ignore[complex-structure, too-many-branches, too-
         actual_src_project = staging_project
         must_cleanup_staging = True
 
-
     with tempfile.TemporaryDirectory(prefix="os-autoinst-obs-auto-submit-", dir=tmpdir_base) as tmpdir_path:
         submitter = AutoSubmitter(
             dir=pathlib.Path(tmpdir_path),
