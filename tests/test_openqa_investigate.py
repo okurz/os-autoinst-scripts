@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
-import io
+import logging
 import pathlib
 import subprocess
 import sys
@@ -34,14 +34,21 @@ sys.modules["openqa_investigate"] = openqa_investigate
 spec.loader.exec_module(openqa_investigate)
 
 
-def test_print(capsys: pytest.CaptureFixture[str]) -> None:
-    openqa_investigate._print("hello world")
-    captured = capsys.readouterr()
-    assert captured.out == "hello world\n"
-
-    err_buf = io.StringIO()
-    openqa_investigate._print("error msg", file=err_buf)
-    assert err_buf.getvalue() == "error msg\n"
+@pytest.mark.parametrize(
+    ("verbose_count", "expected_level"),
+    [
+        (0, logging.WARNING),
+        (1, logging.INFO),
+        (2, logging.DEBUG),
+        (3, logging.DEBUG),
+    ],
+)
+def test_setup_logging(mocker: MockerFixture, verbose_count: int, expected_level: int) -> None:
+    mock_basic_config = mocker.patch("openqa_investigate.logging.basicConfig")
+    openqa_investigate.setup_logging(verbose_count)
+    mock_basic_config.assert_called_once_with(
+        level=expected_level, format="%(levelname)s: %(message)s", stream=sys.stderr, force=True
+    )
 
 
 @pytest.mark.parametrize(
@@ -81,7 +88,6 @@ def test_client_init() -> None:
     assert client.retries == 3
     assert client.retry_sleep_time == 20
     assert not client.dry_run
-    assert not client.verbose
 
 
 def test_client_run_openqa_cli(mocker: MockerFixture) -> None:
@@ -115,24 +121,23 @@ def test_client_run_openqa_cli_dry_run() -> None:
     assert res == {"dry_run": True}
 
 
-def test_client_run_openqa_cli_variants(mocker: MockerFixture, capsys: pytest.CaptureFixture[str]) -> None:
+def test_client_run_openqa_cli_variants(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
     mock_run = mocker.patch("openqa_investigate.subprocess.run")
 
-    # Verbose and mutate=False with dry_run=True (should still execute subprocess)
-    client_verbose = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", dry_run=True, verbose=True)
+    # Debug log and mutate=False with dry_run=True (should still execute subprocess)
+    client_dry = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", dry_run=True)
     mock_run.return_value = Mock(stdout='[{"id": 1}]')
-    res = client_verbose._run_openqa_cli(["jobs/1"])
+    with caplog.at_level(logging.DEBUG):
+        res = client_dry._run_openqa_cli(["jobs/1"])
     assert res == [{"id": 1}]
-    captured = capsys.readouterr()
-    assert "Executing: openqa-cli api" in captured.out
+    assert "Executing: openqa-cli api" in caplog.text
 
     # CalledProcessError branch
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
     mock_run.side_effect = subprocess.CalledProcessError(1, ["cmd"], stderr="CLI failure")
-    with pytest.raises(subprocess.CalledProcessError):
+    with caplog.at_level(logging.ERROR), pytest.raises(subprocess.CalledProcessError):
         client._run_openqa_cli(["jobs/2"])
-    err = capsys.readouterr().err
-    assert "Error executing openqa-cli: CLI failure" in err
+    assert "Error executing openqa-cli: CLI failure" in caplog.text
 
     # Empty stdout
     mock_run.side_effect = None
@@ -204,8 +209,8 @@ def test_client_get_job_comments_variations(mocker: MockerFixture) -> None:
     assert client.get_job_comments(123) == []
 
 
-def test_client_get_http(mocker: MockerFixture) -> None:
-    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", verbose=True)
+def test_client_get_http(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
+    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
     mock_response = MagicMock(spec=httpx.Response)
     mock_response.json.return_value = {"status": "ok"}
 
@@ -215,12 +220,14 @@ def test_client_get_http(mocker: MockerFixture) -> None:
 
     mocker.patch("openqa_investigate.httpx.Client", return_value=mock_client_inst)
 
-    res = client._get_http("tests/123/dependencies_ajax")
+    with caplog.at_level(logging.DEBUG):
+        res = client._get_http("tests/123/dependencies_ajax")
     assert res == {"status": "ok"}
+    assert "HTTP GET: https://openqa.opensuse.org/tests/123/dependencies_ajax" in caplog.text
     mock_client_inst.get.assert_called_once_with("https://openqa.opensuse.org/tests/123/dependencies_ajax")
 
 
-def test_client_get_http_variants(mocker: MockerFixture, capsys: pytest.CaptureFixture[str]) -> None:
+def test_client_get_http_variants(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
     # Non-dict JSON response returns {"data": res_json}
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
     mock_resp_list = MagicMock(spec=httpx.Response)
@@ -231,43 +238,39 @@ def test_client_get_http_variants(mocker: MockerFixture, capsys: pytest.CaptureF
     mocker.patch("openqa_investigate.httpx.Client", return_value=mock_client_inst)
     assert client._get_http("test/path") == {"data": [1, 2, 3]}
 
-    # Retry then succeed with verbose=True
+    # Retry then succeed
     mocker.patch("time.sleep")
-    client_verbose = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", retries=2, verbose=True)
+    client_retry = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", retries=2)
     resp_ok = MagicMock(spec=httpx.Response)
     resp_ok.json.return_value = {"ok": True}
     mock_client_inst.get.side_effect = [Exception("Temporary error"), resp_ok]
-    assert client_verbose._get_http("test/retry") == {"ok": True}
-    captured = capsys.readouterr()
-    assert "HTTP GET failed (attempt 1/3)" in captured.out
-
-    # Retry without verbose
-    client_quiet = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", retries=1, verbose=False)
-    mock_client_inst.get.side_effect = [Exception("Temporary error"), resp_ok]
-    assert client_quiet._get_http("test/retry2") == {"ok": True}
+    with caplog.at_level(logging.WARNING):
+        assert client_retry._get_http("test/retry") == {"ok": True}
+    assert "HTTP GET failed (attempt 1/3)" in caplog.text
 
     # All attempts fail -> raises
     mock_client_inst.get.side_effect = Exception("Persistent error")
-    with pytest.raises(Exception, match="Persistent error"):
-        client_quiet._get_http("test/fail")
-    assert "HTTP GET failed after 2 attempts: Persistent error" in capsys.readouterr().err
+    with caplog.at_level(logging.ERROR), pytest.raises(Exception, match="Persistent error"):
+        client_retry._get_http("test/fail")
+    assert "HTTP GET failed after 3 attempts: Persistent error" in caplog.text
 
     # retries < 0 (covers line 119 return {})
     client_empty = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", retries=-1)
     assert client_empty._get_http("test/empty") == {}
 
 
-def test_client_get_dependencies_ajax_fallback(mocker: MockerFixture) -> None:
-    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", verbose=True)
+def test_client_get_dependencies_ajax_fallback(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
+    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
     mocker.patch.object(client, "_get_http", side_effect=Exception("HTTP error"))
     mock_cli = mocker.patch.object(client, "_run_openqa_cli", return_value={"fallback": "ok"})
 
-    res = client.get_dependencies_ajax(123)
+    with caplog.at_level(logging.DEBUG):
+        res = client.get_dependencies_ajax(123)
     assert res == {"fallback": "ok"}
+    assert "HTTP GET failed, falling back to openqa-cli" in caplog.text
     mock_cli.assert_called_once_with(["-X", "GET", "tests/123/dependencies_ajax"])
 
     # Fallback returning non-dict
-    client.verbose = False
     mock_cli.return_value = ["non-dict"]
     assert client.get_dependencies_ajax(123) == {}
 
@@ -312,19 +315,20 @@ def test_clone_job_helper_dry_run() -> None:
     assert res == {"123": 42}
 
 
-def test_clone_job_variants(mocker: MockerFixture, capsys: pytest.CaptureFixture[str]) -> None:
+def test_clone_job_variants(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
     mock_run = mocker.patch("openqa_investigate.subprocess.run")
 
-    # Verbose execution
+    # Debug execution
     mock_run.return_value = Mock(stdout='{"1": 2}')
-    openqa_investigate.clone_job("https://openqa.opensuse.org", 1, [], verbose=True)
-    assert "Executing: openqa-clone-job" in capsys.readouterr().out
+    with caplog.at_level(logging.DEBUG):
+        openqa_investigate.clone_job("https://openqa.opensuse.org", 1, [])
+    assert "Executing: openqa-clone-job" in caplog.text
 
     # CalledProcessError
     mock_run.side_effect = subprocess.CalledProcessError(1, ["cmd"], stderr="Clone error")
-    with pytest.raises(subprocess.CalledProcessError):
+    with caplog.at_level(logging.ERROR), pytest.raises(subprocess.CalledProcessError):
         openqa_investigate.clone_job("https://openqa.opensuse.org", 1, [])
-    assert "Error executing openqa-clone-job: Clone error" in capsys.readouterr().err
+    assert "Error executing openqa-clone-job: Clone error" in caplog.text
 
     # Invalid JSON
     mock_run.side_effect = None
@@ -824,12 +828,13 @@ def test_build_investigation_comment(mocker: MockerFixture) -> None:
     )
 
 
-def test_post_investigate(mocker: MockerFixture, capsys: pytest.CaptureFixture[str]) -> None:
+def test_post_investigate(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
 
     # Name does not end with investigate:retry
-    openqa_investigate.post_investigate(client, 1, "not_retry", {})
-    assert "already, skipping investigation" in capsys.readouterr().out
+    with caplog.at_level(logging.INFO):
+        openqa_investigate.post_investigate(client, 1, "not_retry", {})
+    assert "already, skipping investigation" in caplog.text
 
     # _verify_retry_job returns False
     mocker.patch.object(openqa_investigate, "_verify_retry_job", return_value=(0, False))
@@ -853,7 +858,7 @@ def test_post_investigate(mocker: MockerFixture, capsys: pytest.CaptureFixture[s
 
 
 def test_run_investigation_logic(mocker: MockerFixture) -> None:
-    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", verbose=True)
+    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
 
     # Unable to query job data -> Exit(1)
     mocker.patch.object(client, "get_job", return_value={})
@@ -912,8 +917,8 @@ def test_run_investigation_logic(mocker: MockerFixture) -> None:
         openqa_investigate.run_investigation_logic(client, 2)
     assert exc.value.exit_code == 1
 
-    # Success path with verbose=False and comment_id_str=None
-    client_quiet = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", verbose=False)
+    # Success path with comment_id_str=None
+    client_quiet = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
     mocker.patch.object(client_quiet, "get_job", return_value={"job": {"test": "foo"}})
     mocker.patch.object(openqa_investigate, "sync_via_investigation_comment", return_value=None)
     mocker.patch.object(openqa_investigate, "trigger_jobs", return_value="out text")
@@ -937,7 +942,7 @@ def test_main(mocker: MockerFixture) -> None:
         scheme="http",
         investigation_gid=5,
         dry_run=1,
-        verbose=True,
+        verbose=1,
         prio_add=20,
         exclude_name_regex="excl",
         exclude_no_group=False,
@@ -952,7 +957,6 @@ def test_main(mocker: MockerFixture) -> None:
     assert client_arg.retries == 5
     assert client_arg.retry_sleep_time == 10
     assert client_arg.dry_run is True
-    assert client_arg.verbose is True
     assert mock_run.call_args[0][1] == 1234
     kwargs = mock_run.call_args[1]
     assert kwargs["extra_settings"] == ["FOO=BAR"]
