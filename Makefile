@@ -1,6 +1,6 @@
 SH_FILES ?= $(shell file --mime-type $$(git ls-files) test/*.t | sed -n 's/^\(.*\):.*text\/x-shellscript.*$$/\1/p')
 SH_SHELLCHECK_FILES ?= $(shell file --mime-type * | sed -n 's/^\(.*\):.*text\/x-shellscript.*$$/\1/p')
-PY_FILES ?= $(shell git ls-files | xargs file --mime-type 2>/dev/null | grep -E 'text/x-script\.python|text/x-python' | cut -d: -f1)
+PY_FILES ?= $(shell set -o pipefail; file --mime-type $$(git ls-files) | grep -E 'text/x-script\.python|text/x-python' | cut -d: -f1)
 RUNNER ?= uv run
 
 ifndef CI
