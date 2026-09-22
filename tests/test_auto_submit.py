@@ -406,3 +406,4 @@ def test_update_package(
     assert caplog.records[0].getMessage() == "update_package pkg"
     assert caplog.records[1].getMessage() == f"First 2 lines of '{changes_file}':\n{content}"
     assert res is True
+    assert (tmp_path / "git-repos" / "pkg" / changes_file).exists()
