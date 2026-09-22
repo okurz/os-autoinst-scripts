@@ -135,7 +135,7 @@ def test_prepare_local_clone_fetches_before_switch(mocker: MockerFixture) -> Non
     """Fetch parent before creating the branch so a fork lacking it still works."""
     mock_run = mocker.patch("auto_submit.subprocess.run")
     mocker.patch("auto_submit.pathlib.Path.iterdir", return_value=[])
-    submitter = auto_submit.AutoSubmitter(dst_project="dst", git_cmd_str="git", dir=pathlib.Path(""), dry_run=False)
+    submitter = auto_submit.AutoSubmitter(dst_project="dst", git_cmd_str="git", dir=pathlib.Path(), dry_run=False)
     submitter._prepare_local_clone("openQA", "leap-16.0")  # ruff: ignore[private-member-access]
     git_calls = [call.args[0] for call in mock_run.call_args_list]
     assert git_calls[0] == ["git", "fetch", "parent"]
