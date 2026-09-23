@@ -583,6 +583,16 @@ def test_query_dependency_data_or_postpone(mocker: MockerFixture) -> None:
     assert openqa_investigate.query_dependency_data_or_postpone(client, 1) == dep_no_nodes
 
 
+def test_query_dependency_data_handles_dictionary_type_cluster(mocker: MockerFixture) -> None:
+    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
+    dep_dict_cluster = {
+        "cluster": {"cluster_1": [1, 2]},
+        "nodes": [{"id": 1, "state": "done"}, {"id": 2, "state": "done"}],
+    }
+    mocker.patch.object(client, "get_dependencies_ajax", return_value=dep_dict_cluster)
+    assert openqa_investigate.query_dependency_data_or_postpone(client, 1) == dep_dict_cluster
+
+
 def test_sync_via_investigation_comment(mocker: MockerFixture) -> None:
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
 

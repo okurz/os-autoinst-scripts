@@ -247,17 +247,24 @@ def parse_job_url(job_url: str, default_scheme: str, default_host: str) -> tuple
     raise ValueError(msg)
 
 
+def get_cluster_jobs(dep_data: dict[str, Any], job_id: int) -> set[int]:
+    """Get all job IDs in the same cluster."""
+    cluster_jobs = {job_id}
+    if "cluster" in dep_data:
+        clusters = dep_data["cluster"].values() if isinstance(dep_data["cluster"], dict) else dep_data["cluster"]
+        for c in clusters:
+            if job_id in c:
+                cluster_jobs.update(c)
+    return cluster_jobs
+
+
 def query_dependency_data_or_postpone(client: OpenQAClient, job_id: int) -> dict[str, Any]:
     """Query dependency AJAX data or postpone if cluster is not done."""
     dep_data = client.get_dependencies_ajax(job_id)
     if not dep_data:
         return {}
 
-    cluster_jobs = {job_id}
-    if "cluster" in dep_data:
-        for c in dep_data["cluster"]:
-            if job_id in c:
-                cluster_jobs.update(c)
+    cluster_jobs = get_cluster_jobs(dep_data, job_id)
 
     pending_count = 0
     if "nodes" in dep_data:
@@ -817,11 +824,7 @@ def run_investigation_logic(  # ruff: ignore[too-many-branches, too-many-argumen
 
     dep_data = query_dependency_data_or_postpone(client, job_id)
 
-    cluster = {job_id}
-    if "cluster" in dep_data:
-        for c in dep_data["cluster"]:
-            if job_id in c:
-                cluster.update(c)
+    cluster = get_cluster_jobs(dep_data, job_id)
     first_cluster_job_id = min(cluster)
 
     if _should_exclude_job(
