@@ -18,6 +18,8 @@ main_requires:
   bash:
   coreutils:  # date, ln, tail
   curl:
+  git-core:
+  git-lfs:
   grep:
   jq:
   html-xml-utils:
