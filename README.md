@@ -13,7 +13,7 @@ e.g. in CI jobs find all the dependencies which are required in
 [dependencies.yaml](https://github.com/os-autoinst/os-autoinst-scripts/blob/master/dependencies.yaml).
 You can install all dependencies by installing the `os-autoinst-scripts-deps`
 package under openSUSE. You need to add the
-[openQA development repository](https://open.qa/docs/#_development_version_repository)
+[openQA development repository](https://open.qa/docs/#development-version-repository)
 for this.
 
 ### auto-review - Automatically detect known issues in openQA jobs, label openQA jobs with ticket references and optionally retrigger
@@ -151,7 +151,7 @@ with minor changes to the input/output format used between the commands.
 
 openQA supports custom job done hook scripts that can be called whenever a job
 is done, see
-http://open.qa/docs/#_enable_custom_hook_scripts_on_job_done_based_on_result
+http://open.qa/docs/#enable-custom-hook-scripts-on-job-done-based-on-result
 for details. For the purpose of being called as these hook scripts here the
 following scripts are provided:
 
