@@ -249,7 +249,8 @@ def test_client_get_http_variants(mocker: MockerFixture, caplog: pytest.LogCaptu
     mock_client_inst.get.side_effect = Exception("Persistent error")
     with caplog.at_level(logging.ERROR), pytest.raises(Exception, match="Persistent error"):
         client_retry._get_http("test/fail")
-    assert "HTTP GET failed after 3 attempts: Persistent error" in caplog.text
+    assert "HTTP GET failed after 3 attempts" in caplog.text
+    assert "Exception: Persistent error" in caplog.text
 
     # retries < 0 (covers line 119 return {})
     client_empty = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", retries=-1)
