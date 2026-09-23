@@ -901,12 +901,12 @@ def main(  # ruff: ignore[too-many-arguments]
         ),
     ] = 0,
     dry_run: Annotated[
-        int,
+        bool,
         typer.Option(
             envvar="dry_run",
-            help="Set to 1 for dry run, 0 otherwise.",
+            help="Perform a dry run without making modifying API requests.",
         ),
-    ] = 0,
+    ] = False,
     verbose: Annotated[
         int,
         typer.Option(
@@ -990,7 +990,7 @@ def main(  # ruff: ignore[too-many-arguments]
         host_url=host_url,
         retries=retries,
         retry_sleep_time=retry_sleep_time,
-        dry_run=bool(dry_run),
+        dry_run=dry_run,
     )
 
     run_investigation_logic(

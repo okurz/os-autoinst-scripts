@@ -948,7 +948,7 @@ def test_main(mocker: MockerFixture) -> None:
         host="test.openqa",
         scheme="http",
         investigation_gid=5,
-        dry_run=1,
+        dry_run=True,
         verbose=1,
         prio_add=20,
         exclude_name_regex="excl",
