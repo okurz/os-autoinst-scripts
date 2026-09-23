@@ -249,13 +249,9 @@ def parse_job_url(job_url: str, default_scheme: str, default_host: str) -> tuple
 
 def get_cluster_jobs(dep_data: dict[str, Any], job_id: int) -> set[int]:
     """Get all job IDs in the same cluster."""
-    cluster_jobs = {job_id}
-    if "cluster" in dep_data:
-        clusters = dep_data["cluster"].values() if isinstance(dep_data["cluster"], dict) else dep_data["cluster"]
-        for c in clusters:
-            if job_id in c:
-                cluster_jobs.update(c)
-    return cluster_jobs
+    raw = dep_data.get("cluster") or ()
+    clusters = raw.values() if isinstance(raw, dict) else raw
+    return {job_id}.union(*(c for c in clusters if job_id in c))
 
 
 def query_dependency_data_or_postpone(client: OpenQAClient, job_id: int) -> dict[str, Any]:
