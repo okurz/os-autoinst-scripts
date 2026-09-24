@@ -131,10 +131,12 @@ def test_client_run_openqa_cli_variants(mocker: MockerFixture, caplog: pytest.Lo
 
     # CalledProcessError branch
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
-    mock_run.side_effect = subprocess.CalledProcessError(1, ["cmd"], stderr="CLI failure")
+    mock_run.side_effect = subprocess.CalledProcessError(1, ["cmd"], output="CLI stdout", stderr="CLI failure")
     with caplog.at_level(logging.ERROR), pytest.raises(subprocess.CalledProcessError):
         client._run_openqa_cli(["jobs/2"])
-    assert "Error executing openqa-cli: CLI failure" in caplog.text
+    assert "Error executing openqa-cli:" in caplog.text
+    assert "stdout: CLI stdout" in caplog.text
+    assert "stderr: CLI failure" in caplog.text
 
     # Empty stdout
     mock_run.side_effect = None
@@ -148,6 +150,78 @@ def test_client_run_openqa_cli_variants(mocker: MockerFixture, caplog: pytest.Lo
     # JSON primitive (not dict or list)
     mock_run.return_value = Mock(stdout="12345")
     assert client._run_openqa_cli(["jobs/5"]) == {"raw_output": "12345"}
+
+
+@pytest.mark.parametrize(
+    ("ignore_status", "output", "stderr", "should_raise"),
+    [
+        (
+            (openqa_investigate.HTTP_FORBIDDEN, openqa_investigate.HTTP_NOT_FOUND),
+            '{"error":"Administrator level required","error_status":403}',
+            "403 Forbidden",
+            False,
+        ),
+        (
+            (openqa_investigate.HTTP_FORBIDDEN, openqa_investigate.HTTP_NOT_FOUND),
+            '{"error":"Comment 965075 does not exist","error_status":404}',
+            "404 Not Found",
+            False,
+        ),
+        (
+            (openqa_investigate.HTTP_NOT_FOUND,),
+            '{"error": "something"}',
+            "404 Not Found",
+            False,
+        ),
+        (
+            (openqa_investigate.HTTP_NOT_FOUND,),
+            "Some non-json error",
+            "404 Not Found",
+            False,
+        ),
+        (
+            (openqa_investigate.HTTP_FORBIDDEN, openqa_investigate.HTTP_NOT_FOUND),
+            '{"error":"Server error","error_status":500}',
+            "Internal Server Error",
+            True,
+        ),
+        (
+            (),
+            '{"error":"Administrator level required","error_status":403}',
+            "403 Forbidden",
+            True,
+        ),
+    ],
+    ids=[
+        "403_in_json_ignored",
+        "404_in_json_ignored",
+        "404_in_stderr_with_json_no_status",
+        "404_in_stderr_non_json_ignored",
+        "500_raises_error",
+        "default_empty_ignore_raises_on_403",
+    ],
+)
+def test_client_run_openqa_cli_ignore_status(
+    mocker: MockerFixture,
+    caplog: pytest.LogCaptureFixture,
+    ignore_status: tuple[int, ...],
+    output: str,
+    stderr: str,
+    *,
+    should_raise: bool,
+) -> None:
+    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
+    mock_run = mocker.patch("openqa_investigate.subprocess.run")
+    mock_run.side_effect = subprocess.CalledProcessError(1, ["cmd"], output=output, stderr=stderr)
+
+    if should_raise:
+        with pytest.raises(subprocess.CalledProcessError):
+            client._run_openqa_cli(["jobs/delete"], ignore_status=ignore_status)
+    else:
+        with caplog.at_level(logging.DEBUG):
+            res = client._run_openqa_cli(["jobs/delete"], ignore_status=ignore_status)
+        assert res == {}
+        assert "openqa-cli failed with error status (ignored)" in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -178,6 +252,12 @@ def test_client_api_methods(
 
     if method_name in {"get_job_status", "get_job", "get_job_comments"}:
         mock_run.assert_called_once_with(expected_cli_args)
+    elif method_name == "delete_job_comment":
+        mock_run.assert_called_once_with(
+            expected_cli_args,
+            mutate=True,
+            ignore_status=(openqa_investigate.HTTP_FORBIDDEN, openqa_investigate.HTTP_NOT_FOUND),
+        )
     else:
         mock_run.assert_called_once_with(expected_cli_args, mutate=True)
 
@@ -939,21 +1019,28 @@ def test_run_investigation_logic(mocker: MockerFixture) -> None:
         openqa_investigate.run_investigation_logic(client, 2)
     assert exc.value.exit_code == 1
 
-    # Success path with comment_id_str=None
+    # Success path with comment_id_str=None and empty out
     client_quiet = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
     mocker.patch.object(client_quiet, "get_job", return_value={"job": {"test": "foo"}})
     mocker.patch.object(openqa_investigate, "sync_via_investigation_comment", return_value=None)
-    mocker.patch.object(openqa_investigate, "trigger_jobs", return_value="out text")
+    mocker.patch.object(openqa_investigate, "trigger_jobs", return_value="")
     mock_fin.reset_mock()
     openqa_investigate.run_investigation_logic(client_quiet, 2)
     mock_fin.assert_not_called()
 
 
-def test_main(mocker: MockerFixture) -> None:
+def test_main(mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch) -> None:
     # Invalid job_id / URL -> Exit(1)
     with pytest.raises(typer.Exit) as exc:
         openqa_investigate.main("invalid_job_id")
     assert exc.value.exit_code == 1
+
+    # Verbose via environment variable
+    monkeypatch.setenv("VERBOSE", "1")
+    mock_run = mocker.patch.object(openqa_investigate, "run_investigation_logic")
+    openqa_investigate.main("1234", verbose=0)
+    mock_run.assert_called_once()
+    mock_run.reset_mock()
 
     # Valid invocation
     mock_run = mocker.patch.object(openqa_investigate, "run_investigation_logic")

@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import httpx
 import typer
 
+HTTP_FORBIDDEN = 403
 HTTP_NOT_FOUND = 404
 USER_AGENT = "openqa-investigate (https://github.com/os-autoinst/os-autoinst-scripts)"
 
@@ -31,6 +32,24 @@ def setup_logging(verbose: int) -> None:
     }
     level = level_map.get(min(verbose, 2), logging.WARNING)
     logging.basicConfig(level=level, format="%(levelname)s: %(message)s", stream=sys.stderr, force=True)
+
+
+def _should_ignore_error(e: subprocess.CalledProcessError, ignore_status: tuple[int, ...]) -> bool:
+    if not ignore_status:
+        return False
+    stdout_content = e.stdout or ""
+    stderr_content = e.stderr or ""
+    status: int | None = None
+    try:
+        error_data = json.loads(stdout_content)
+        if isinstance(error_data, dict) and isinstance(error_data.get("error_status"), int):
+            status = error_data["error_status"]
+    except json.JSONDecodeError:
+        pass
+
+    return (status is not None and status in ignore_status) or any(
+        str(code) in stdout_content or str(code) in stderr_content for code in ignore_status
+    )
 
 
 class OpenQAClient:
@@ -49,7 +68,9 @@ class OpenQAClient:
         self.retry_sleep_time = retry_sleep_time
         self.dry_run = dry_run
 
-    def _run_openqa_cli(self, args: list[str], *, mutate: bool = False) -> dict[str, Any] | list[dict[str, Any]]:
+    def _run_openqa_cli(
+        self, args: list[str], *, mutate: bool = False, ignore_status: tuple[int, ...] = ()
+    ) -> dict[str, Any] | list[dict[str, Any]]:
         cmd = [
             "openqa-cli",
             "api",
@@ -71,7 +92,20 @@ class OpenQAClient:
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, check=True)
         except subprocess.CalledProcessError as e:
-            log.exception("Error executing openqa-cli: %s", e.stderr)
+            stdout_content = e.stdout or ""
+            stderr_content = e.stderr or ""
+            if _should_ignore_error(e, ignore_status):
+                log.debug(
+                    "openqa-cli failed with error status (ignored): stdout=%r, stderr=%r",
+                    stdout_content,
+                    stderr_content,
+                )
+                return {}
+            log.exception(
+                "Error executing openqa-cli:\nstdout: %s\nstderr: %s",
+                stdout_content,
+                stderr_content,
+            )
             raise
 
         stdout = res.stdout.strip()
@@ -144,16 +178,16 @@ class OpenQAClient:
             return res
         return {}
 
-    def put_job_comment(self, job_id: int, comment_id: int, text: str) -> dict[str, Any]:
+    def put_job_comment(self, job_id: int, comment_id: int | str, text: str) -> dict[str, Any]:
         args = ["-X", "PUT", f"jobs/{job_id}/comments/{comment_id}", f"text={text}"]
         res = self._run_openqa_cli(args, mutate=True)
         if isinstance(res, dict):
             return res
         return {}
 
-    def delete_job_comment(self, job_id: int, comment_id: int) -> dict[str, Any]:
+    def delete_job_comment(self, job_id: int, comment_id: int | str) -> dict[str, Any]:
         args = ["-X", "DELETE", f"jobs/{job_id}/comments/{comment_id}"]
-        res = self._run_openqa_cli(args, mutate=True)
+        res = self._run_openqa_cli(args, mutate=True, ignore_status=(HTTP_FORBIDDEN, HTTP_NOT_FOUND))
         if isinstance(res, dict):
             return res
         return {}
