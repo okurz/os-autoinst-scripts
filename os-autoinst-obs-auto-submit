@@ -839,6 +839,7 @@ def _run_submissions(  # ruff: ignore[complex-structure, too-many-branches, too-
     submit_target_extra: str,
     packages: str,
     skip_wait_for_build: bool,
+    cleanup_dir: bool,
 ) -> None:
     """Run package submissions with the defined configuration."""
     if not dst_project:
@@ -901,7 +902,9 @@ def _run_submissions(  # ruff: ignore[complex-structure, too-many-branches, too-
         actual_src_project = staging_project
         must_cleanup_staging = True
 
-    with tempfile.TemporaryDirectory(prefix="os-autoinst-obs-auto-submit-", dir=tmpdir_base) as tmpdir_path:
+    with tempfile.TemporaryDirectory(
+        prefix="os-autoinst-obs-auto-submit-", dir=tmpdir_base, delete=cleanup_dir
+    ) as tmpdir_path:
         submitter = AutoSubmitter(
             dir=pathlib.Path(tmpdir_path),
             src_project=actual_src_project,
@@ -979,6 +982,7 @@ def main(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     ] = "openSUSE:Backports:SLE-15-SP7:Update,openSUSE:Leap:16.0",
     packages: Annotated[str | None, typer.Option(envvar="packages")] = None,
     skip_wait_for_build: Annotated[bool, typer.Option(envvar="skip_wait_for_build")] = False,
+    cleanup_dir: Annotated[bool, typer.Option(envvar="cleanup_dir")] = True,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
     quiet: Annotated[int, typer.Option("--quiet", "-V", count=True)] = 0,
     force: Annotated[bool, typer.Option("--force", "-f", envvar="force")] = False,
@@ -1009,6 +1013,7 @@ def main(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         submit_target_extra=submit_target_extra,
         packages=packages,
         skip_wait_for_build=skip_wait_for_build,
+        cleanup_dir=cleanup_dir,
     )
 
 
