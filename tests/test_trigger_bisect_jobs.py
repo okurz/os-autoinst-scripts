@@ -7,7 +7,7 @@ import importlib.util
 import json
 import pathlib
 import re
-import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import subprocess
 from argparse import Namespace
 from typing import Any, cast
 from unittest.mock import MagicMock, call, patch

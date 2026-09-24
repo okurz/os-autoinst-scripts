@@ -1,5 +1,5 @@
 # Copyright SUSE LLC
-# ruff: file-ignore[boolean-positional-value-in-call, line-too-long, suspicious-subprocess-import, import-outside-top-level, commented-out-code, too-many-statements]
+# ruff: file-ignore[boolean-positional-value-in-call, line-too-long, import-outside-top-level, commented-out-code, too-many-statements]
 """Unit tests for openqa-label-known-issues."""
 
 from __future__ import annotations

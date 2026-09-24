@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
 # ruff: file-ignore[boolean-type-hint-positional-argument, boolean-default-value-positional-argument]
-
-
 """Prepare and submit os-autoinst packages to target projects like openSUSE:Factory."""
+
+from __future__ import annotations
 
 import datetime
 import difflib
@@ -14,7 +14,7 @@ import pathlib
 import re
 import shlex
 import shutil
-import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import subprocess
 import tempfile
 import time
 import urllib.parse
@@ -79,7 +79,7 @@ def _run_cmd(
     cmd: list[str], capture_output: bool = False, text: bool = False, check: bool = False
 ) -> subprocess.CompletedProcess[str]:
     log.info("[cmd] %s", " ".join(cmd))
-    return subprocess.run(cmd, capture_output=capture_output, text=text, check=check)  # ruff: ignore[subprocess-without-shell-equals-true]
+    return subprocess.run(cmd, capture_output=capture_output, text=text, check=check)
 
 
 def run_osc_cmd(cmd: list[str], *, dry_run: bool = False, mutating: bool = False) -> subprocess.CompletedProcess[str]:
@@ -976,7 +976,7 @@ def main(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     submit_target_extra: Annotated[
         str, typer.Option(envvar="submit_target_extra")
     ] = "openSUSE:Backports:SLE-15-SP7:Update,openSUSE:Leap:16.0",
-    packages: Annotated[str, typer.Option(envvar="packages")] = None,
+    packages: Annotated[str | None, typer.Option(envvar="packages")] = None,
     skip_wait_for_build: Annotated[bool, typer.Option(envvar="skip_wait_for_build")] = False,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
     quiet: Annotated[int, typer.Option("--quiet", "-V", count=True)] = 0,

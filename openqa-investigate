@@ -71,7 +71,7 @@ class OpenQAClient:
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, check=True)
         except subprocess.CalledProcessError as e:
-            log.error("Error executing openqa-cli: %s", e.stderr)
+            log.exception("Error executing openqa-cli: %s", e.stderr)
             raise
 
         stdout = res.stdout.strip()
@@ -112,7 +112,7 @@ class OpenQAClient:
                     )
                     time.sleep(self.retry_sleep_time)
                 else:
-                    log.error("HTTP GET failed after %d attempts: %s", self.retries + 1, e)
+                    log.exception("HTTP GET failed after %d attempts", self.retries + 1)
                     raise
         return {}
 
@@ -211,7 +211,7 @@ def clone_job(
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
-        log.error("Error executing openqa-clone-job: %s", e.stderr)
+        log.exception("Error executing openqa-clone-job: %s", e.stderr)
         raise
 
     stdout = res.stdout.strip()
@@ -225,7 +225,7 @@ def clone_job(
     return {"raw_output": stdout}
 
 
-def parse_job_url(job_url: str, default_scheme: str, default_host: str) -> tuple[int, str, str]:
+def parse_job_url(job_url: str, _default_scheme: str, _default_host: str) -> tuple[int, str, str]:
     parsed = urlparse(job_url)
     if parsed.scheme and parsed.netloc:
         scheme = parsed.scheme
@@ -788,7 +788,7 @@ def post_investigate(client: OpenQAClient, job_id: int, retry_name: str, job_dat
         raise typer.Exit(code=2)
 
 
-def run_investigation_logic(  # ruff: ignore[too-many-branches, too-many-arguments, complex-structure]
+def run_investigation_logic(  # ruff: ignore[too-many-arguments, complex-structure]
     client: OpenQAClient,
     job_id: int,
     *,
@@ -844,7 +844,7 @@ def run_investigation_logic(  # ruff: ignore[too-many-branches, too-many-argumen
             log.warning("Ignoring known error when triggering job %s: '%s'", job_id, err_msg)
             rc = 0
         else:
-            log.error("Unexpected error encountered when triggering job %s: '%s'", job_id, err_msg)
+            log.exception("Unexpected error encountered when triggering job %s: '%s'", job_id, err_msg)
             rc = 1
 
         if comment_id_str:
@@ -855,7 +855,7 @@ def run_investigation_logic(  # ruff: ignore[too-many-branches, too-many-argumen
         raise typer.Exit(code=rc) from e
 
     if out:
-        print(out)
+        sys.stdout.write(f"{out}\n")
     log.debug("openqa-investigate, id: '%s', out: '%s'", job_id, out)
 
     if comment_id_str:
@@ -968,21 +968,21 @@ def main(  # ruff: ignore[too-many-arguments]
 ) -> None:
     """Triggers openQA investigation jobs for a specified job ID or URL."""
     if not verbose:
-        env_verbose = os.environ.get("verbose", "").lower()
-        if env_verbose in ("1", "true", "yes"):
+        env_verbose = os.environ.get("VERBOSE", "").lower()
+        if env_verbose in {"1", "true", "yes"}:
             verbose = 1
     setup_logging(verbose)
 
-    try:
-        if job_id.isdigit():
-            parsed_id = int(job_id)
-            parsed_scheme = scheme
-            parsed_host = host
-        else:
+    if job_id.isdigit():
+        parsed_id = int(job_id)
+        parsed_scheme = scheme
+        parsed_host = host
+    else:
+        try:
             parsed_id, parsed_scheme, parsed_host = parse_job_url(job_id, scheme, host)
-    except ValueError as e:
-        log.error("Error parsing job ID or URL: %s", e)
-        raise typer.Exit(code=1) from e
+        except ValueError as e:
+            log.exception("Error parsing job ID or URL")
+            raise typer.Exit(code=1) from e
 
     host_url = f"{parsed_scheme}://{parsed_host}"
 

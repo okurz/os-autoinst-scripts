@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-# ruff: file-ignore[undocumented-public-function, too-many-arguments, too-many-positional-arguments, suspicious-subprocess-import, subprocess-without-shell-equals-true, print, error-instead-of-exception]
+# ruff: file-ignore[too-many-arguments, too-many-positional-arguments, print, error-instead-of-exception]
 """Monitor an openQA job by polling the status of a job over the API."""
 
 from __future__ import annotations

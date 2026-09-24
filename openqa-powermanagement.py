@@ -7,7 +7,7 @@ import configparser
 import json
 import logging
 import os
-import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import subprocess
 from pathlib import Path
 
 import requests

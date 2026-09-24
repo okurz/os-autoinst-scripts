@@ -12,7 +12,7 @@ import argparse
 import itertools
 import logging
 import pathlib
-import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import subprocess
 import sys
 import xml.etree.ElementTree as ET  # ruff: ignore[suspicious-xml-etree-import]
 from concurrent.futures import ThreadPoolExecutor
@@ -59,7 +59,7 @@ client_args = [
 def call(cmds: list[str], dry_run: bool = False) -> str:  # ruff: ignore[boolean-type-hint-positional-argument, boolean-default-value-positional-argument]
     """Call openqa-cli."""
     log.debug("call: %s", " ".join(cmds))
-    res = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+    res = subprocess.run(
         (["echo", "Simulating: "] if dry_run else []) + cmds,
         capture_output=True,
         check=False,

@@ -1,5 +1,5 @@
 # Copyright SUSE LLC
-# ruff: file-ignore[suspicious-subprocess-import, boolean-type-hint-positional-argument, compare-to-empty-string, unused-variable]
+# ruff: file-ignore[boolean-type-hint-positional-argument, compare-to-empty-string, unused-variable]
 """Unit tests for os-autoinst-obs-auto-submit."""
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ def test_prepare_local_clone_fetches_before_switch(mocker: MockerFixture) -> Non
     mock_run = mocker.patch("auto_submit.subprocess.run")
     mocker.patch("auto_submit.pathlib.Path.iterdir", return_value=[])
     submitter = auto_submit.AutoSubmitter(dst_project="dst", git_cmd_str="git", dir=pathlib.Path(), dry_run=False)
-    submitter._prepare_local_clone("openQA", "leap-16.0")  # ruff: ignore[private-member-access]
+    submitter._prepare_local_clone("openQA", "leap-16.0")
     git_calls = [call.args[0] for call in mock_run.call_args_list]
     assert git_calls[0] == ["git", "fetch", "parent"]
     assert git_calls[1] == ["git", "switch", "-C", "leap-16.0", "parent/leap-16.0"]
@@ -145,7 +145,7 @@ def test_prepare_local_clone_fetches_before_switch(mocker: MockerFixture) -> Non
 def test_prepare_local_clone_dry_run_logs_fetch_first(caplog: pytest.LogCaptureFixture) -> None:
     submitter = auto_submit.AutoSubmitter(dst_project="dst", git_cmd_str="git", dry_run=True)
     with caplog.at_level("INFO"):
-        submitter._prepare_local_clone("openQA", "leap-16.0")  # ruff: ignore[private-member-access]
+        submitter._prepare_local_clone("openQA", "leap-16.0")
     messages = [r.getMessage() for r in caplog.records]
     assert messages[0] == "[dry-run] Would execute: git fetch parent"
     assert messages[1] == "[dry-run] Would execute: git switch -C leap-16.0 parent/leap-16.0"
@@ -236,7 +236,7 @@ def test_last_revision_none(mocker: MockerFixture) -> None:
     ],
 )
 def test_format_skip_reason(content: str, expected: str) -> None:
-    assert auto_submit._format_skip_reason(content) == expected  # ruff: ignore[private-member-access]
+    assert auto_submit._format_skip_reason(content) == expected
 
 
 @pytest.mark.parametrize(
@@ -248,13 +248,13 @@ def test_format_skip_reason(content: str, expected: str) -> None:
 )
 def test_log_skip_reason(reason: str, expected: str, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level("INFO"):
-        auto_submit._log_skip_reason(reason)  # ruff: ignore[private-member-access]
+        auto_submit._log_skip_reason(reason)
     assert caplog.records[0].getMessage() == expected
 
 
 def test_get_packages_to_submit_env(mocker: MockerFixture) -> None:
     mocker.patch.dict("os.environ", {"PACKAGES": "pkg1 pkg2"})
-    res = auto_submit._get_packages_to_submit("dst", "osc", dry_run=False)  # ruff: ignore[private-member-access]
+    res = auto_submit._get_packages_to_submit("dst", "osc", dry_run=False)
     assert res == ["pkg1", "pkg2"]
 
 
@@ -262,7 +262,7 @@ def test_get_packages_to_submit_osc(mocker: MockerFixture) -> None:
     mocker.patch.dict("os.environ", {}, clear=True)
     mock_run = mocker.patch("auto_submit.run_osc_cmd")
     mock_run.return_value = subprocess.CompletedProcess(["osc"], 0, stdout="pkg1\npkg2-test\npkg3\n")
-    res = auto_submit._get_packages_to_submit("dst", "osc", dry_run=True)  # ruff: ignore[private-member-access]
+    res = auto_submit._get_packages_to_submit("dst", "osc", dry_run=True)
     assert res == ["pkg1", "pkg3"]
     mock_run.assert_called_once_with(["osc", "ls", "dst"], dry_run=True, mutating=False)
 
@@ -291,7 +291,7 @@ def test_run_submissions_force(mocker: MockerFixture) -> None:
     mocker.patch("auto_submit._get_packages_to_submit", return_value=["pkg1"])
     mocker.patch("auto_submit.AutoSubmitter")
 
-    auto_submit._run_submissions(  # ruff: ignore[private-member-access]
+    auto_submit._run_submissions(
         src_project="devel:openQA",
         dst_project="devel:openQA:tested",
         staging_project="devel:openQA:testing",
@@ -305,7 +305,7 @@ def test_run_submissions_force(mocker: MockerFixture) -> None:
         git_user="user",
         submit_target_extra="none",
         packages=None,
-        skip_wait_for_build=False
+        skip_wait_for_build=False,
     )
 
     mock_unlink.assert_called_once()

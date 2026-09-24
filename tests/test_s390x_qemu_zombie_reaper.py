@@ -1,5 +1,5 @@
 # Copyright SUSE LLC
-# ruff: file-ignore[boolean-type-hint-positional-argument, suspicious-subprocess-import]
+# ruff: file-ignore[boolean-type-hint-positional-argument]
 """Unit tests for s390x-qemu-zombie-reaper.py."""
 
 from __future__ import annotations
