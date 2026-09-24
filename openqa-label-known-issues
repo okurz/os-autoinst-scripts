@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-# ruff: file-ignore[blind-except, complex-structure, non-imperative-mood, line-too-long, boolean-type-hint-positional-argument, boolean-positional-value-in-call, too-many-return-statements, too-many-branches, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, magic-value-comparison, try-except-pass, suppressible-exception, uncapitalized-environment-variables, print, try-consider-else, try-except-in-loop, manual-list-comprehension]
+# ruff: file-ignore[blind-except, complex-structure, non-imperative-mood, line-too-long, boolean-type-hint-positional-argument, boolean-positional-value-in-call, too-many-return-statements, too-many-branches, too-many-arguments, too-many-locals, too-many-positional-arguments, magic-value-comparison, try-except-pass, suppressible-exception, uncapitalized-environment-variables, print, try-consider-else, try-except-in-loop, manual-list-comprehension]
 """Takes an openQA job URL, looks for matching "known issues" and labels/restarts."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -345,13 +346,17 @@ def handle_unreachable(
     openqa_client: OpenQAClient,
 ) -> int:
     html_out = os.environ.get("JOB_HTML_FILE")
-    temp_html_created = False
-    if not html_out:
-        fd, html_out = tempfile.mkstemp(prefix="openqa-label-known-issues--job-details-")
-        os.close(fd)
-        temp_html_created = True
+    keep_job_html_file = os.environ.get("KEEP_JOB_HTML_FILE") == "1"
 
-    try:
+    with contextlib.ExitStack() as stack:
+        if not html_out:
+            tmp_file = stack.enter_context(
+                tempfile.NamedTemporaryFile(
+                    prefix="openqa-label-known-issues--job-details-", delete=not keep_job_html_file
+                )
+            )
+            html_out = tmp_file.name
+
         try:
             head_res = client.head(testurl, follow_redirects=True)
             head_ok = head_res.status_code < 400
@@ -407,13 +412,6 @@ def handle_unreachable(
             )
             return 1
         return 0
-    finally:
-        keep_job_html_file = os.environ.get("KEEP_JOB_HTML_FILE") == "1"
-        if temp_html_created and not keep_job_html_file:
-            try:
-                pathlib.Path(html_out).unlink()
-            except Exception:
-                pass
 
 
 def handle_unreviewed(
@@ -526,13 +524,15 @@ def investigate_issue(
         return
 
     report_file = os.environ.get("REPORT_FILE")
-    temp_report_created = False
-    if not report_file:
-        fd, report_file = tempfile.mkstemp(prefix="openqa-label-known-issues--output-")
-        os.close(fd)
-        temp_report_created = True
+    keep_report_file = os.environ.get("KEEP_REPORT_FILE") == "1"
 
-    try:
+    with contextlib.ExitStack() as stack:
+        if not report_file:
+            tmp_file = stack.enter_context(
+                tempfile.NamedTemporaryFile(prefix="openqa-label-known-issues--output-", delete=not keep_report_file)
+            )
+            report_file = tmp_file.name
+
         print(f"Requesting jobs/{job_id} via openqa-cli")
         cmd_job = ["openqa-cli", *openqa_client.base_args, f"jobs/{job_id}?ancestors=1"]
         try:
@@ -603,14 +603,6 @@ def investigate_issue(
             job_data=job_data,
             openqa_client=openqa_client,
         )
-
-    finally:
-        keep_report_file = os.environ.get("KEEP_REPORT_FILE") == "1"
-        if temp_report_created and not keep_report_file:
-            try:
-                pathlib.Path(report_file).unlink()
-            except Exception:
-                pass
 
 
 @app.command()
