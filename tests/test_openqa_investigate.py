@@ -584,6 +584,20 @@ def test_query_dependency_data_or_postpone(mocker: MockerFixture) -> None:
     assert openqa_investigate.query_dependency_data_or_postpone(client, 1) == dep_no_nodes
 
 
+@pytest.mark.parametrize(
+    ("dep_data", "job_id", "expected"),
+    [
+        ({"cluster": {"cluster_1": [1, 2]}}, 1, {1, 2}),
+        ({"cluster": [[1, 2], [3, 4]]}, 1, {1, 2}),
+        ({"cluster": [[3, 4]]}, 1, {1}),
+        ({"cluster": None}, 1, {1}),
+        ({}, 1, {1}),
+    ],
+)
+def test_get_cluster_jobs(dep_data: dict[str, Any], job_id: int, expected: set[int]) -> None:
+    assert openqa_investigate.get_cluster_jobs(dep_data, job_id) == expected
+
+
 def test_query_dependency_data_handles_dictionary_type_cluster(mocker: MockerFixture) -> None:
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
     dep_dict_cluster = {
