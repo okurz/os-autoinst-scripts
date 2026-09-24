@@ -25,7 +25,7 @@ import argparse
 import logging
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import gitlab
 from gitlab.v4.objects import Project
@@ -49,7 +49,7 @@ def create_or_update_ci_pipeline(gl_proj: Project, token_expiry_date: date) -> N
     sched_exists = False
     # Keep CI Schedule to run two day before DAYS_UNTIL_TOKEN_ROTATION
     rotation_date = datetime(
-        token_expiry_date.year, token_expiry_date.month, token_expiry_date.day, 23, 55, 0, 0, tzinfo=timezone.utc
+        token_expiry_date.year, token_expiry_date.month, token_expiry_date.day, 23, 55, 0, 0, tzinfo=UTC
     ) - timedelta(days=(DAYS_UNTIL_TOKEN_ROTATION - 2))
     cron_sched = rotation_date.strftime("%M %H %d %m *")
     # List all schedules (use get_all=True to bypass default pagination)
@@ -145,9 +145,9 @@ def main() -> None:
 
     # Calculate days left for token expiry, rotate token 3 weeks before
     expires_at_date = date.fromisoformat(access_token.expires_at)
-    days_left = (expires_at_date - datetime.now(timezone.utc).date()).days
+    days_left = (expires_at_date - datetime.now(UTC).date()).days
     if days_left <= DAYS_UNTIL_TOKEN_ROTATION:
-        expiry_date = datetime.now(timezone.utc).date() + timedelta(364)
+        expiry_date = datetime.now(UTC).date() + timedelta(364)
         expires_at_date = date.fromisoformat(expiry_date.strftime("%Y-%m-%d"))
         create_or_update_ci_pipeline(glproject, expires_at_date)
         logger.info("Rotating existing token with id: %s", access_token.id)

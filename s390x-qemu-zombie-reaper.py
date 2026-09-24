@@ -15,7 +15,7 @@ import shlex
 import subprocess
 import time
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated
 
 import typer
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 app = typer.Typer(help="Automated openQA Zombie Reaper for s390x")
 
 
-class RebootMethod(str, Enum):
+class RebootMethod(StrEnum):
     """Method used to reboot the hypervisor."""
 
     SYSRQ = "sysrq"
