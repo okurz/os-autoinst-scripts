@@ -215,6 +215,20 @@ def generate_changelog(dir_path: str, package: str, submit_target: str, osc_cmd_
     dest_path.write_text(changelog_content, encoding="utf-8")
 
 
+def extract_obscpio(archive: pathlib.Path, target_dir: pathlib.Path) -> None:
+    """Extract a cpio archive into a directory."""
+    target_dir.mkdir(exist_ok=True)
+    try:
+        with pathlib.Path(archive).open("rb") as infile:
+            cpio_path = shutil.which("cpio") or "/usr/bin/cpio"
+            subprocess.run([cpio_path, "-idmv"], stdin=infile, cwd=target_dir, capture_output=True, check=True)
+    except subprocess.CalledProcessError as e:
+        log.exception("cpio failed with exit code %s:", e.returncode)
+        if e.stderr:
+            log.exception("Error output:\n%s", e.stderr)
+        raise
+
+
 @dataclass
 class AutoSubmitter:
     """Automate the preparation and submission of packages."""
@@ -383,7 +397,9 @@ class AutoSubmitter:
 
             source_dir = self.dir / self.dst_project / package
             for item in source_dir.iterdir():
-                if item.is_file():
+                if item.name == "node_modules.obscpio":
+                    extract_obscpio(item, target_dir=pathlib.Path() / "node_modules")
+                elif item.is_file():
                     shutil.copy2(item, ".")
                 elif item.is_dir() and item.name not in {".osc", ".git"}:
                     shutil.copytree(item, item.name)

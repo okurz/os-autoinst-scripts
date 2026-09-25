@@ -410,3 +410,12 @@ def test_update_package(
     assert caplog.records[1].getMessage() == f"First 2 lines of '{changes_file}':\n{content}"
     assert res is True
     assert (tmp_path / "git-repos" / "pkg" / changes_file).exists()
+
+
+def test_cpio(tmp_path: pathlib.Path) -> None:
+    cpio = pathlib.Path() / "tests" / "data" / "test.cpio"
+
+    auto_submit.extract_obscpio(cpio, target_dir=tmp_path)
+    target = tmp_path / "cpio-dir"
+    assert (target / "file1").exists()
+    assert (target / "subdir" / "file2").exists()

@@ -17,6 +17,7 @@ targets:
 main_requires:
   bash:
   coreutils:  # date, ln, tail
+  cpio:
   curl:
   git-core:
   git-lfs:
