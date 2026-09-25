@@ -475,7 +475,7 @@ def test_label_on_issues_without_tickets(mocker: MockerFixture) -> None:
     assert mock_lbl.call_count == 2
 
 
-def test_handle_unreachable(mocker: MockerFixture) -> None:
+def test_handle_unreachable(mocker: MockerFixture, tmp_path: pathlib.Path) -> None:
     mock_client = MagicMock(spec=httpx.Client)
 
     # 1. testurl head failure, host_url not in testurl
@@ -560,20 +560,23 @@ def test_handle_unreachable(mocker: MockerFixture) -> None:
     )
     assert res == 0
 
-    # 8. testurl downloaded, younger than 14 days, KEEP_JOB_HTML_FILE is true (unlink skipped / test cleanup branches)
-    mocker.patch.dict("os.environ", {"KEEP_JOB_HTML_FILE": "1"})
+    # 8. testurl downloaded, younger than 14 days, JOB_HTML_FILE set
+    mocker.patch.dict("os.environ", {"JOB_HTML_FILE": str(tmp_path / "custom_html")})
     res = openqa_label_known_issues.handle_unreachable(
         "http://host.com/test", "123", mock_client, "http://host.com", []
     )
     assert res == 0
+    assert (tmp_path / "custom_html").exists()
 
-    # 9. Exception during unlink (cleanup exception branch covers line 342-343)
-    mocker.patch.dict("os.environ", {"KEEP_JOB_HTML_FILE": "0"}, clear=True)
-    mocker.patch("pathlib.Path.unlink", side_effect=Exception("unlink err"))
-    res = openqa_label_known_issues.handle_unreachable(
-        "http://host.com/test", "123", mock_client, "http://host.com", []
-    )
-    assert res == 0
+    # 9. KEEP_JOB_HTML_FILE is true without JOB_HTML_FILE sets delete=False
+    with patch("tempfile.NamedTemporaryFile") as mock_named_temp:
+        mock_named_temp.return_value.__enter__.return_value.name = str(tmp_path / "temp_html")
+        mocker.patch.dict("os.environ", {"KEEP_JOB_HTML_FILE": "1"}, clear=True)
+        res = openqa_label_known_issues.handle_unreachable(
+            "http://host.com/test", "123", mock_client, "http://host.com", []
+        )
+        assert res == 0
+        mock_named_temp.assert_called_once_with(prefix="openqa-label-known-issues--job-details-", delete=False)
 
 
 def test_handle_unreviewed(mocker: MockerFixture, tmp_path: pathlib.Path) -> None:
@@ -756,9 +759,9 @@ def test_investigate_issue(mocker: MockerFixture, tmp_path: pathlib.Path) -> Non
     )
     # unreachable matched and returns early
 
-    # 8. REPORT_FILE, KEEP_REPORT_FILE set
+    # 8. REPORT_FILE set
     mock_unreachable.return_value = 0
-    mocker.patch.dict("os.environ", {"REPORT_FILE": str(tmp_path / "custom_report"), "KEEP_REPORT_FILE": "1"})
+    mocker.patch.dict("os.environ", {"REPORT_FILE": str(tmp_path / "custom_report"), "KEEP_REPORT_FILE": "0"})
     mock_resp_log.status_code = 200
     mock_resp_log.text = "some text"
     openqa_label_known_issues.investigate_issue(
@@ -766,15 +769,21 @@ def test_investigate_issue(mocker: MockerFixture, tmp_path: pathlib.Path) -> Non
     )
     assert (tmp_path / "custom_report").exists()
 
-    # 9. Exception during report file unlink (covers lines 544-545 finally cleanup branch)
-    mocker.patch.dict("os.environ", {"REPORT_FILE": "", "KEEP_REPORT_FILE": "0"}, clear=True)
-    mocker.patch("pathlib.Path.unlink", side_effect=Exception("unlink err"))
-    openqa_label_known_issues.investigate_issue(
-        "http://host/tests/123", mock_client, openqa_label_known_issues.OpenQAClient("http://host"), [], "http://host"
-    )
+    # 9. KEEP_REPORT_FILE is true without REPORT_FILE sets delete=False
+    with patch("tempfile.NamedTemporaryFile") as mock_named_temp:
+        mock_named_temp.return_value.__enter__.return_value.name = str(tmp_path / "temp_report")
+        mocker.patch.dict("os.environ", {"KEEP_REPORT_FILE": "1"}, clear=True)
+        openqa_label_known_issues.investigate_issue(
+            "http://host/tests/123",
+            mock_client,
+            openqa_label_known_issues.OpenQAClient("http://host"),
+            [],
+            "http://host",
+        )
+        mock_named_temp.assert_called_once_with(prefix="openqa-label-known-issues--output-", delete=False)
 
     # 10. label_on_issues_without_tickets returns True (covers line 519 return)
-    mocker.patch("pathlib.Path.unlink", side_effect=None)
+    mocker.patch.dict("os.environ", {"REPORT_FILE": "", "KEEP_REPORT_FILE": "0"}, clear=True)
     mock_unreachable.return_value = 0
     mock_sub.return_value = Mock(stdout='{"job": {"state": "done", "result": "failed", "reason": "myreason"}}')
     mock_resp_log.status_code = 200
