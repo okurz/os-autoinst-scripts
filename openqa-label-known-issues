@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-# ruff: file-ignore[blind-except, complex-structure, non-imperative-mood, line-too-long, boolean-type-hint-positional-argument, boolean-positional-value-in-call, too-many-return-statements, too-many-branches, too-many-arguments, too-many-locals, too-many-positional-arguments, magic-value-comparison, try-except-pass, suppressible-exception, uncapitalized-environment-variables, print, try-consider-else, try-except-in-loop, manual-list-comprehension]
+# ruff: file-ignore[blind-except, complex-structure, non-imperative-mood, line-too-long, boolean-type-hint-positional-argument, boolean-positional-value-in-call, too-many-return-statements, too-many-branches, too-many-arguments, too-many-locals, too-many-positional-arguments, magic-value-comparison, try-except-pass, suppressible-exception, uncapitalized-environment-variables, print, try-consider-else, manual-list-comprehension]
 """Takes an openQA job URL, looks for matching "known issues" and labels/restarts."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from typing import Annotated, Any
 
@@ -80,8 +80,8 @@ def is_older_than_14_days(timeago_str: str) -> bool:
         t_str = timeago_str.replace("Z", "+00:00")
         dt = datetime.fromisoformat(t_str)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        limit = datetime.now(timezone.utc) - timedelta(days=14)
+            dt = dt.replace(tzinfo=UTC)
+        limit = datetime.now(UTC) - timedelta(days=14)
         return dt < limit
     except Exception as e:
         print(f"Error comparing date {timeago_str}: {e}", file=sys.stderr)

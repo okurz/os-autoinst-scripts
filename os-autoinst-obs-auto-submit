@@ -205,7 +205,7 @@ def generate_changelog(dir_path: str, package: str, submit_target: str, osc_cmd_
         elif is_remove:
             parsed_diff_lines.append(f"- Removed {content}")
 
-    now_str = datetime.datetime.now(datetime.timezone.utc).strftime("%a %b %d %H:%M:%S UTC %Y")
+    now_str = datetime.datetime.now(datetime.UTC).strftime("%a %b %d %H:%M:%S UTC %Y")
     changelog_content = (
         "-------------------------------------------------------------------\n"
         f"{now_str} - Dominik Heidler <dheidler@suse.de>\n\n" + "\n".join(parsed_diff_lines) + "\n\n" + factory_changes
@@ -512,7 +512,7 @@ class AutoSubmitter:
                         updated_at_str = pr.get("updated_at", "")
                         dt_str = updated_at_str.replace("Z", "+00:00")
                         dt = datetime.datetime.fromisoformat(dt_str)
-                        now = datetime.datetime.now(datetime.timezone.utc)
+                        now = datetime.datetime.now(datetime.UTC)
                         diff = now - dt
                         if diff.total_seconds() < throttle_days_value * 86400:
                             log.info(

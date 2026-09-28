@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Copyright SUSE LLC
-# ruff: file-ignore[any-type, blind-except, complex-structure, line-too-long, future-required-type-annotation, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, magic-value-comparison, print, error-instead-of-exception]
+# ruff: file-ignore[any-type, blind-except, complex-structure, line-too-long, boolean-type-hint-positional-argument, reimplemented-operator, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, magic-value-comparison, print, error-instead-of-exception]
 """Investigates an openQA job failure using an LLM."""
 
 import datetime
@@ -47,7 +47,7 @@ class RetryTransport(httpx.HTTPTransport):
 
     @staticmethod
     def _now() -> datetime.datetime:
-        return datetime.datetime.now(datetime.timezone.utc)
+        return datetime.datetime.now(datetime.UTC)
 
     def _check_and_raise(self, response: httpx.Response) -> None:
         if response.status_code in self.RETRY_STATUS_CODES:
