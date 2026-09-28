@@ -229,6 +229,34 @@ def extract_obscpio(archive: pathlib.Path, target_dir: pathlib.Path) -> None:
         raise
 
 
+def replace_node_modules_handling(file: pathlib.Path) -> None:
+    content = file.read_text(encoding="utf-8")
+
+    pattern = (
+        r"Source2:\s*node_modules\.spec\.inc\n"
+        r"%include\s*%\{_sourcedir\}/node_modules\.spec\.inc"
+    )
+    replacement = "#!CreateArchive\nSource10:       node_modules.tar.gz"
+
+    new_content, count = re.subn(pattern, replacement, content)
+
+    if count > 0:
+        file.write_text(new_content, encoding="utf-8")
+        log.info("Successfully updated %s", file.name)
+    else:
+        log.info("%s does not contain node_modules specific sources; no changes made.", file.name)
+
+
+def empty_git_dir(path: pathlib.Path) -> None:
+    for item in path.iterdir():
+        if item.name in {".git", ".gitignore", ".gitattributes"}:
+            continue
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+
+
 @dataclass
 class AutoSubmitter:
     """Automate the preparation and submission of packages."""
@@ -384,25 +412,28 @@ class AutoSubmitter:
         else:
             _run_cmd(fetch_cmd, check=True)
             _run_cmd(switch_cmd, check=True)
+            self._copy_files_to_clone(package)
 
-            # Delete and replace every file that we have just generated.
-            # Keep special files that only exist in the git tree.
-            for item in pathlib.Path().iterdir():
-                if item.name in {".git", ".gitignore", ".gitattributes"}:
-                    continue
-                if item.is_dir():
-                    shutil.rmtree(item)
-                else:
-                    item.unlink()
+    def _copy_files_to_clone(self, package: str) -> None:
+        """Delete and replace every file that we have just generated.
 
-            source_dir = self.dir / self.dst_project / package
-            for item in source_dir.iterdir():
-                if item.name == "node_modules.obscpio":
-                    extract_obscpio(item, target_dir=pathlib.Path() / "node_modules")
-                elif item.is_file():
-                    shutil.copy2(item, ".")
-                elif item.is_dir() and item.name not in {".osc", ".git"}:
-                    shutil.copytree(item, item.name)
+        Keep special files that only exist in the git tree.
+        """
+        empty_git_dir(pathlib.Path())
+
+        source_dir = self.dir / self.dst_project / package
+        for item in source_dir.iterdir():
+            if item.name == "node_modules.obscpio":
+                extract_obscpio(item, target_dir=pathlib.Path() / "node_modules")
+            elif item.name.endswith(".spec"):
+                shutil.copy2(item, ".")
+                replace_node_modules_handling(pathlib.Path(item.name))
+            elif item.name == "node_modules.spec.inc":
+                pass
+            elif item.is_file():
+                shutil.copy2(item, ".")
+            elif item.is_dir() and item.name not in {".osc", ".git"}:
+                shutil.copytree(item, item.name)
 
     def _commit_and_push(self, title: str, branch: str) -> None:
         """Commit and push changes."""

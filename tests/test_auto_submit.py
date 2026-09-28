@@ -151,6 +151,44 @@ def test_prepare_local_clone_dry_run_logs_fetch_first(caplog: pytest.LogCaptureF
     assert messages[1] == "[dry-run] Would execute: git switch -C leap-16.0 parent/leap-16.0"
 
 
+def test_copy_files_to_clone(
+    mocker: MockerFixture,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_extract = mocker.patch("auto_submit.extract_obscpio", return_value=True)
+    sourcedir = tmp_path / "dst" / "pkg"
+    clonedir = tmp_path / "git" / "pkg"
+    sourcedir.mkdir(parents=True)
+    clonedir.mkdir(parents=True)
+    (sourcedir / "node_modules.spec.inc").touch()
+    (sourcedir / "node_modules.obscpio").touch()
+    (sourcedir / "newfile1").touch()
+    (sourcedir / "newdir1").mkdir()
+    (sourcedir / ".osc").mkdir()
+    (clonedir / "oldfile1").touch()
+    (clonedir / ".gitignore").touch()
+    (clonedir / ".gitattributes").touch()
+    (clonedir / "olddir1").mkdir()
+    (clonedir / ".git").mkdir()
+
+    monkeypatch.chdir(clonedir)
+    submitter = auto_submit.AutoSubmitter(
+        dir=tmp_path,
+        dst_project="dst",
+    )
+    submitter._copy_files_to_clone("pkg")
+
+    mock_extract.assert_called_once_with(sourcedir / "node_modules.obscpio", target_dir=pathlib.Path("node_modules"))
+    assert (clonedir / "newfile1").exists()
+    assert (clonedir / "newdir1").exists()
+    assert (clonedir / ".git").exists()
+    assert (clonedir / ".gitignore").exists()
+    assert (clonedir / ".gitattributes").exists()
+    assert not (clonedir / "node_modules.spec.inc").exists()
+    assert not (clonedir / ".osc").exists()
+
+
 def test_make_obs_submit_request_success(mocker: MockerFixture) -> None:
     mocker.patch("auto_submit.get_obs_sr_id", return_value="23")
     mock_run = mocker.patch("auto_submit.run_osc_cmd")
@@ -419,3 +457,49 @@ def test_cpio(tmp_path: pathlib.Path) -> None:
     target = tmp_path / "cpio-dir"
     assert (target / "file1").exists()
     assert (target / "subdir" / "file2").exists()
+
+
+def test_replace_node_modules_handling(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: pathlib.Path,
+) -> None:
+    caplog.set_level(logging.INFO)
+
+    specfile = tmp_path / "openQA.spec"
+    content = """
+Source0:        %{name}-%{version}.tar.xz
+Source1:        openQA-rpmlintrc
+Source2:        node_modules.spec.inc
+%include        %{_sourcedir}/node_modules.spec.inc
+BuildRequires:  fdupes
+"""
+    specfile.write_text(content)
+    expected = """
+Source0:        %{name}-%{version}.tar.xz
+Source1:        openQA-rpmlintrc
+#!CreateArchive
+Source10:       node_modules.tar.gz
+BuildRequires:  fdupes
+"""
+
+    auto_submit.replace_node_modules_handling(specfile)
+
+    assert specfile.read_text() == expected
+    assert caplog.records[0].getMessage() == "Successfully updated openQA.spec"
+
+    caplog.clear()
+
+    content = """
+Source0:        %{name}-%{version}.tar.xz
+Source1:        openQA-rpmlintrc
+BuildRequires:  fdupes
+"""
+    specfile.write_text(content)
+    expected = content
+
+    auto_submit.replace_node_modules_handling(specfile)
+
+    assert specfile.read_text() == expected
+    assert (
+        caplog.records[0].getMessage() == "openQA.spec does not contain node_modules specific sources; no changes made."
+    )
