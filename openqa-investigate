@@ -19,6 +19,8 @@ import typer
 
 HTTP_NOT_FOUND = 404
 USER_AGENT = "openqa-investigate (https://github.com/os-autoinst/os-autoinst-scripts)"
+DEFAULT_HTTP_TIMEOUT: float = 90.0
+DEFAULT_INVESTIGATION_TIMEOUT: float = 120.0
 
 log = logging.getLogger("openqa-investigate")
 
@@ -36,18 +38,22 @@ def setup_logging(verbose: int) -> None:
 class OpenQAClient:
     """A client for interacting with openQA API and front-end endpoints."""
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments]
         self,
         host_url: str,
         retries: int = 3,
         retry_sleep_time: int = 20,
         *,
         dry_run: bool = False,
+        http_timeout: float = DEFAULT_HTTP_TIMEOUT,
+        investigation_timeout: float = DEFAULT_INVESTIGATION_TIMEOUT,
     ) -> None:
         self.host_url = host_url.rstrip("/")
         self.retries = retries
         self.retry_sleep_time = retry_sleep_time
         self.dry_run = dry_run
+        self.http_timeout = http_timeout
+        self.investigation_timeout = investigation_timeout
 
     def _run_openqa_cli(self, args: list[str], *, mutate: bool = False) -> dict[str, Any] | list[dict[str, Any]]:
         cmd = [
@@ -86,15 +92,16 @@ class OpenQAClient:
             return res_json
         return {"raw_output": stdout}
 
-    def _get_http(self, path: str) -> dict[str, Any]:
+    def _get_http(self, path: str, *, timeout: float | None = None) -> dict[str, Any]:
         url = f"{self.host_url}/{path.lstrip('/')}"
         log.debug("HTTP GET: %s", url)
 
         headers = {"User-Agent": USER_AGENT}
+        req_timeout = timeout if timeout is not None else self.http_timeout
 
         for attempt in range(self.retries + 1):
             try:
-                with httpx.Client(headers=headers, follow_redirects=True) as client:
+                with httpx.Client(headers=headers, follow_redirects=True, timeout=req_timeout) as client:
                     response = client.get(url)
                     response.raise_for_status()
                     res_json = response.json()
@@ -176,7 +183,7 @@ class OpenQAClient:
             return {}
 
     def get_investigation_ajax(self, job_id: int) -> dict[str, Any]:
-        return self._get_http(f"tests/{job_id}/investigation_ajax")
+        return self._get_http(f"tests/{job_id}/investigation_ajax", timeout=self.investigation_timeout)
 
     def get_vars_json(self, job_id: int) -> dict[str, Any]:
         return self._get_http(f"tests/{job_id}/file/vars.json")
@@ -961,6 +968,22 @@ def main(  # ruff: ignore[too-many-arguments]
             help="Retry sleep time in seconds.",
         ),
     ] = 20,
+    http_timeout: Annotated[
+        float,
+        typer.Option(
+            "--http-timeout",
+            envvar=["OPENQA_HTTP_TIMEOUT_S"],
+            help="Timeout for HTTP requests in seconds.",
+        ),
+    ] = DEFAULT_HTTP_TIMEOUT,
+    investigation_timeout: Annotated[
+        float,
+        typer.Option(
+            "--investigation-timeout",
+            envvar=["OPENQA_INVESTIGATION_TIMEOUT_S"],
+            help="Timeout for investigation_ajax HTTP requests in seconds.",
+        ),
+    ] = DEFAULT_INVESTIGATION_TIMEOUT,
 ) -> None:
     """Triggers openQA investigation jobs for a specified job ID or URL."""
     if not verbose:
@@ -987,6 +1010,8 @@ def main(  # ruff: ignore[too-many-arguments]
         retries=retries,
         retry_sleep_time=retry_sleep_time,
         dry_run=dry_run,
+        http_timeout=http_timeout,
+        investigation_timeout=investigation_timeout,
     )
 
     run_investigation_logic(
