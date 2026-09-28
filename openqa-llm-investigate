@@ -20,6 +20,8 @@ import tenacity
 import typer
 
 USER_AGENT = "openqa-llm-investigate (https://github.com/os-autoinst/os-autoinst-scripts)"
+DEFAULT_OPENQA_TIMEOUT: float = 90.0
+DEFAULT_INVESTIGATION_TIMEOUT: float = 120.0
 
 log = logging.getLogger(__name__)
 
@@ -111,9 +113,18 @@ class RetryTransport(httpx.HTTPTransport):
 app = typer.Typer(add_completion=False)
 
 
-def fetch_json(client: httpx.Client, url: str, params: dict[str, Any] | None = None, default: Any = None) -> Any:
+def fetch_json(
+    client: httpx.Client,
+    url: str,
+    params: dict[str, Any] | None = None,
+    default: Any = None,
+    timeout: float | None = None,
+) -> Any:
     try:
-        response = client.get(url, params=params)
+        kwargs: dict[str, Any] = {"params": params}
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        response = client.get(url, **kwargs)
         response.raise_for_status()
         return response.json()
     except Exception as e:
@@ -121,10 +132,13 @@ def fetch_json(client: httpx.Client, url: str, params: dict[str, Any] | None = N
         return default if default is not None else {}
 
 
-def fetch_text(client: httpx.Client, url: str, max_lines: int = 200) -> str:
+def fetch_text(client: httpx.Client, url: str, max_lines: int = 200, timeout: float | None = None) -> str:
+    lines: deque[str] = deque(maxlen=max_lines)
+    kwargs: dict[str, Any] = {}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
     try:
-        lines: deque[str] = deque(maxlen=max_lines)
-        with client.stream("GET", url) as response:
+        with client.stream("GET", url, **kwargs) as response:
             response.raise_for_status()
             for line in response.iter_lines():
                 lines.append(line)
@@ -230,6 +244,7 @@ def _perform_investigation(
     history_limit: int,
     build_failure_threshold: int,
     prompt_template_file: str | None,
+    investigation_timeout: float = DEFAULT_INVESTIGATION_TIMEOUT,
 ) -> None:
     # Check for existing LLM investigation comments
     comments = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}/comments", default=[])
@@ -254,7 +269,7 @@ def _perform_investigation(
     failed_modules = [m.get("name", "unknown") for m in job.get("testresults", []) if m.get("result") == "failed"]
 
     log_text = fetch_text(client, f"{base_url}/tests/{job_id}/file/autoinst-log.txt", max_lines=log_lines)
-    investigation = fetch_json(client, f"{base_url}/tests/{job_id}/investigation_ajax")
+    investigation = fetch_json(client, f"{base_url}/tests/{job_id}/investigation_ajax", timeout=investigation_timeout)
 
     test_name = job.get("test", "unknown")
     settings = job.get("settings", {})
@@ -439,6 +454,22 @@ def investigate(
             help="File containing the prompt template to use",
         ),
     ] = os.environ.get("LLM_PROMPT_TEMPLATE_FILE"),
+    openqa_timeout: Annotated[
+        float,
+        typer.Option(
+            "--openqa-timeout",
+            envvar=["OPENQA_HTTP_TIMEOUT_S"],
+            help="Timeout for openQA HTTP requests in seconds",
+        ),
+    ] = float(os.environ.get("OPENQA_HTTP_TIMEOUT_S", str(DEFAULT_OPENQA_TIMEOUT))),
+    investigation_timeout: Annotated[
+        float,
+        typer.Option(
+            "--investigation-timeout",
+            envvar=["OPENQA_INVESTIGATION_TIMEOUT_S"],
+            help="Timeout for investigation_ajax HTTP requests in seconds",
+        ),
+    ] = float(os.environ.get("OPENQA_INVESTIGATION_TIMEOUT_S", str(DEFAULT_INVESTIGATION_TIMEOUT))),
 ) -> None:
     setup_logging(verbose, quiet)
     base_url, job_id = parse_job_url(job_url)
@@ -448,7 +479,7 @@ def investigate(
         sys.exit(1)
 
     transport = RetryTransport(retries=retries)
-    with httpx.Client(transport=transport, headers={"User-Agent": USER_AGENT}) as client:
+    with httpx.Client(transport=transport, headers={"User-Agent": USER_AGENT}, timeout=openqa_timeout) as client:
         _perform_investigation(
             client,
             base_url,
@@ -463,6 +494,7 @@ def investigate(
             history_limit,
             build_failure_threshold,
             prompt_template_file,
+            investigation_timeout=investigation_timeout,
         )
 
 

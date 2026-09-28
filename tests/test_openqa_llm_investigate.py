@@ -39,6 +39,12 @@ def test_fetch_json_success() -> None:
     mock_client.get.assert_called_once_with("http://example.com", params=None)
     mock_response.raise_for_status.assert_called_once()
 
+    # With explicit timeout
+    mock_client.get.reset_mock()
+    res_timeout = llm_investigate.fetch_json(mock_client, "http://example.com", timeout=120.0)
+    assert res_timeout == {"foo": "bar"}
+    mock_client.get.assert_called_once_with("http://example.com", params=None, timeout=120.0)
+
 
 def test_fetch_json_failure() -> None:
     mock_client = MagicMock(spec=httpx.Client)
@@ -66,6 +72,12 @@ def test_fetch_text_success() -> None:
     assert len(lines) == 200
     assert lines[-1] == "line 299"
     assert lines[0] == "line 100"
+
+    # With explicit timeout
+    mock_client.stream.reset_mock()
+    res_timeout = llm_investigate.fetch_text(mock_client, "http://example.com", max_lines=200, timeout=45.0)
+    assert res_timeout == res
+    mock_client.stream.assert_called_once_with("GET", "http://example.com", timeout=45.0)
 
 
 def test_fetch_text_failure() -> None:
@@ -150,11 +162,14 @@ def setup_mock_client(mocker: MockerFixture, overrides: dict[str, Any] | None = 
 def test_investigate_cmd(mocker: MockerFixture) -> None:
     mock_post = mocker.patch("llm_investigate.post_comment")
     mock_print = mocker.patch("builtins.print")
-    setup_mock_client(mocker)
+    client = setup_mock_client(mocker)
     llm_investigate.investigate("123")
     mock_print.assert_called_once_with("https://openqa.opensuse.org/tests/123")
     mock_post.assert_called_once()
     assert "BISECT: YES" in mock_post.call_args[0][2]
+    ajax_calls = [call for call in client.get.call_args_list if "investigation_ajax" in call[0][0]]
+    assert len(ajax_calls) == 1
+    assert ajax_calls[0][1]["timeout"] == pytest.approx(120.0)
 
 
 def test_investigate_cmd_with_token(mocker: MockerFixture) -> None:
@@ -442,3 +457,15 @@ def test_investigate_configures_retry_transport(mocker: MockerFixture) -> None:
     mock_retry_transport_class.assert_called_once_with(retries=4)
     mock_client_class.assert_called_once()
     assert mock_client_class.call_args[1]["transport"] == mock_retry_transport_class.return_value
+    assert mock_client_class.call_args[1]["timeout"] == pytest.approx(90.0)
+
+
+def test_investigate_configures_timeouts(mocker: MockerFixture) -> None:
+    mock_client_class = mocker.patch("llm_investigate.httpx.Client")
+    mock_perform = mocker.patch("llm_investigate._perform_investigation")
+
+    llm_investigate.investigate("123", openqa_timeout=45.0, investigation_timeout=60.0)
+
+    assert mock_client_class.call_args[1]["timeout"] == pytest.approx(45.0)
+    mock_perform.assert_called_once()
+    assert mock_perform.call_args[1]["investigation_timeout"] == pytest.approx(60.0)

@@ -223,6 +223,10 @@ def test_client_get_http(mocker: MockerFixture, caplog: pytest.LogCaptureFixture
     assert "HTTP GET: https://openqa.opensuse.org/tests/123/dependencies_ajax" in caplog.text
     mock_client_inst.get.assert_called_once_with("https://openqa.opensuse.org/tests/123/dependencies_ajax")
 
+    # Custom timeout
+    res_custom = client._get_http("tests/123/dependencies_ajax", timeout=45.0)
+    assert res_custom == {"status": "ok"}
+
 
 def test_client_get_http_variants(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
     # Non-dict JSON response returns {"data": res_json}
@@ -275,10 +279,12 @@ def test_client_get_dependencies_ajax_fallback(mocker: MockerFixture, caplog: py
 
 def test_client_endpoints(mocker: MockerFixture) -> None:
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
+    assert client.http_timeout == pytest.approx(90.0)
+    assert client.investigation_timeout == pytest.approx(120.0)
     mock_http = mocker.patch.object(client, "_get_http", return_value={"data": 1})
 
     assert client.get_investigation_ajax(123) == {"data": 1}
-    mock_http.assert_called_with("tests/123/investigation_ajax")
+    mock_http.assert_called_with("tests/123/investigation_ajax", timeout=120.0)
 
     assert client.get_vars_json(123) == {"data": 1}
     mock_http.assert_called_with("tests/123/file/vars.json")
@@ -979,6 +985,8 @@ def test_main(mocker: MockerFixture) -> None:
     assert client_arg.retries == 5
     assert client_arg.retry_sleep_time == 10
     assert client_arg.dry_run is True
+    assert client_arg.http_timeout == pytest.approx(90.0)
+    assert client_arg.investigation_timeout == pytest.approx(120.0)
     assert mock_run.call_args[0][1] == 1234
     kwargs = mock_run.call_args[1]
     assert kwargs["extra_settings"] == ["FOO=BAR"]
@@ -988,6 +996,13 @@ def test_main(mocker: MockerFixture) -> None:
     assert kwargs["exclude_no_group"] is False
     assert kwargs["exclude_group_regex"] == "group_excl"
     assert kwargs["force"] is True
+
+    # Custom timeouts passed to main
+    mock_run.reset_mock()
+    openqa_investigate.main("1234", http_timeout=45.0, investigation_timeout=60.0)
+    client_custom = mock_run.call_args[0][0]
+    assert client_custom.http_timeout == pytest.approx(45.0)
+    assert client_custom.investigation_timeout == pytest.approx(60.0)
 
 
 def test_main_entrypoint(mocker: MockerFixture) -> None:
