@@ -125,9 +125,9 @@ def fetch_json(
     client: httpx.Client,
     url: str,
     params: dict[str, Any] | None = None,
-    default: Any = None,
+    default: Any = None,  # ruff: ignore[any-type]
     timeout: float | None = None,
-) -> Any:
+) -> Any:  # ruff: ignore[any-type]
     """Fetch JSON from a URL and return it, or the default if it fails."""
     try:
         kwargs: dict[str, Any] = {"params": params}
