@@ -2,7 +2,7 @@
 
 source test/init
 
-plan tests 36
+plan tests 46
 dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 source "$dir/../openqa-label-known-issues-and-investigate-hook"
@@ -124,3 +124,21 @@ is "$rc" 0 'successful hook (LLM fails, fallback) (123)'
 has "$got" "WARNING: openqa-llm-investigate failed"
 has "$got" "- openqa-investigate"
 has "$got" "- openqa-trigger-bisect-jobs"
+
+export llm_investigate=0
+export LLM_INVESTIGATE_FAIL=false
+try hook 123
+is "$rc" 0 'successful hook with llm_investigate disabled explicitly (0)'
+has "$got" "- openqa-label-known-issues"
+hasnt "$got" "- openqa-llm-investigate"
+has "$got" "- openqa-investigate"
+has "$got" "- openqa-trigger-bisect-jobs"
+
+export llm_investigate=false
+try hook 123
+is "$rc" 0 'successful hook with llm_investigate disabled explicitly (false)'
+has "$got" "- openqa-label-known-issues"
+hasnt "$got" "- openqa-llm-investigate"
+has "$got" "- openqa-investigate"
+has "$got" "- openqa-trigger-bisect-jobs"
+unset llm_investigate
