@@ -1140,6 +1140,10 @@ def test_run_investigation_logic(mocker: MockerFixture) -> None:
     openqa_investigate.run_investigation_logic(client_quiet, 2)
     mock_fin.assert_not_called()
 
+    # Success path with empty out
+    mocker.patch.object(openqa_investigate, "trigger_jobs", return_value="")
+    openqa_investigate.run_investigation_logic(client_quiet, 2)
+
 
 def test_main(mocker: MockerFixture) -> None:
     # Invalid job_id / URL -> Exit(1)
@@ -1189,6 +1193,12 @@ def test_main(mocker: MockerFixture) -> None:
     client_custom = mock_run.call_args[0][0]
     assert client_custom.http_timeout == pytest.approx(45.0)
     assert client_custom.investigation_timeout == pytest.approx(60.0)
+
+    # VERBOSE environment variable
+    mocker.patch.dict("os.environ", {"VERBOSE": "1"})
+    mock_setup = mocker.patch.object(openqa_investigate, "setup_logging")
+    openqa_investigate.main("1234")
+    mock_setup.assert_called_with(1)
 
 
 def test_main_entrypoint(mocker: MockerFixture) -> None:
