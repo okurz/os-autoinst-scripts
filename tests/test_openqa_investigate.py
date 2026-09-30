@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import datetime
 import importlib.machinery
 import importlib.util
 import logging
@@ -239,26 +240,211 @@ def test_client_get_http_variants(mocker: MockerFixture, caplog: pytest.LogCaptu
     mocker.patch("openqa_investigate.httpx.Client", return_value=mock_client_inst)
     assert client._get_http("test/path") == {"data": [1, 2, 3]}
 
-    # Retry then succeed
-    mocker.patch("time.sleep")
-    client_retry = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", retries=2)
-    resp_ok = MagicMock(spec=httpx.Response)
-    resp_ok.json.return_value = {"ok": True}
-    mock_client_inst.get.side_effect = [Exception("Temporary error"), resp_ok]
-    with caplog.at_level(logging.WARNING):
-        assert client_retry._get_http("test/retry") == {"ok": True}
-    assert "HTTP GET failed (attempt 1/3)" in caplog.text
-
     # All attempts fail -> raises
+    client_retry = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", retries=2)
     mock_client_inst.get.side_effect = Exception("Persistent error")
     with caplog.at_level(logging.ERROR), pytest.raises(Exception, match="Persistent error"):
         client_retry._get_http("test/fail")
     assert "HTTP GET failed after 3 attempts" in caplog.text
     assert "Exception: Persistent error" in caplog.text
 
-    # retries < 0 (covers line 119 return {})
+    # retries < 0 (covers line return {})
     client_empty = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", retries=-1)
     assert client_empty._get_http("test/empty") == {}
+
+
+def test_client_get_http_configures_retry_transport(mocker: MockerFixture) -> None:
+    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", retries=4)
+    mock_client_class = mocker.patch("openqa_investigate.httpx.Client")
+    mock_client_inst = mock_client_class.return_value.__enter__.return_value
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.json.return_value = {"ok": True}
+    mock_client_inst.get.return_value = mock_resp
+
+    client._get_http("test/path")
+
+    mock_client_class.assert_called_once()
+    transport = mock_client_class.call_args[1]["transport"]
+    assert isinstance(transport, openqa_investigate.RetryTransport)
+    assert transport.retries == 4
+
+
+def test_retry_transport_no_retry_on_200(mocker: MockerFixture) -> None:
+    mock_sleep = mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("openqa_investigate.httpx.HTTPTransport.handle_request")
+
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_super_handle.return_value = mock_response
+
+    transport = openqa_investigate.RetryTransport(retries=3)
+    req = httpx.Request("GET", "http://example.com")
+    res = transport.handle_request(req)
+
+    assert res == mock_response
+    assert mock_super_handle.call_count == 1
+    mock_sleep.assert_not_called()
+
+
+def test_retry_transport_retry_after_seconds(mocker: MockerFixture) -> None:
+    mock_sleep = mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("openqa_investigate.httpx.HTTPTransport.handle_request")
+
+    resp429 = MagicMock(spec=httpx.Response)
+    resp429.status_code = 429
+    resp429.headers = httpx.Headers({"Retry-After": "5"})
+
+    resp200 = MagicMock(spec=httpx.Response)
+    resp200.status_code = 200
+
+    mock_super_handle.side_effect = [resp429, resp200]
+
+    transport = openqa_investigate.RetryTransport(retries=2)
+    req = httpx.Request("GET", "http://example.com")
+    res = transport.handle_request(req)
+
+    assert res == resp200
+    assert mock_super_handle.call_count == 2
+    mock_sleep.assert_called_once_with(5.0)
+    resp429.close.assert_called_once()
+
+
+def test_retry_transport_retry_on_503(mocker: MockerFixture) -> None:
+    mock_sleep = mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("openqa_investigate.httpx.HTTPTransport.handle_request")
+
+    resp503 = MagicMock(spec=httpx.Response)
+    resp503.status_code = 503
+    resp503.headers = httpx.Headers({})
+
+    resp200 = MagicMock(spec=httpx.Response)
+    resp200.status_code = 200
+
+    mock_super_handle.side_effect = [resp503, resp200]
+
+    transport = openqa_investigate.RetryTransport(retries=2)
+    req = httpx.Request("GET", "http://example.com")
+    res = transport.handle_request(req)
+
+    assert res == resp200
+    assert mock_super_handle.call_count == 2
+    mock_sleep.assert_called_once_with(1.0)
+    resp503.close.assert_called_once()
+
+
+def test_retry_transport_retry_after_http_date(mocker: MockerFixture) -> None:
+    mock_sleep = mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("openqa_investigate.httpx.HTTPTransport.handle_request")
+
+    resp429 = MagicMock(spec=httpx.Response)
+    resp429.status_code = 429
+    resp429.headers = httpx.Headers({"Retry-After": "Wed, 21 Oct 2015 07:28:00 GMT"})
+
+    resp200 = MagicMock(spec=httpx.Response)
+    resp200.status_code = 200
+
+    mock_super_handle.side_effect = [resp429, resp200]
+
+    transport = openqa_investigate.RetryTransport(retries=2)
+    static_now = datetime.datetime(2015, 10, 21, 7, 27, 50, tzinfo=datetime.UTC)
+    mocker.patch.object(transport, "_now", return_value=static_now)
+
+    req = httpx.Request("GET", "http://example.com")
+    res = transport.handle_request(req)
+
+    assert res == resp200
+    assert mock_super_handle.call_count == 2
+    mock_sleep.assert_called_once_with(10.0)
+    resp429.close.assert_called_once()
+
+
+def test_retry_transport_retry_after_invalid_date(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
+    mock_sleep = mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("openqa_investigate.httpx.HTTPTransport.handle_request")
+
+    resp429 = MagicMock(spec=httpx.Response)
+    resp429.status_code = 429
+    resp429.headers = httpx.Headers({"Retry-After": "invalid date string"})
+
+    resp200 = MagicMock(spec=httpx.Response)
+    resp200.status_code = 200
+
+    mock_super_handle.side_effect = [resp429, resp200]
+
+    transport = openqa_investigate.RetryTransport(retries=2)
+    req = httpx.Request("GET", "http://example.com")
+    with caplog.at_level(logging.DEBUG):
+        res = transport.handle_request(req)
+
+    assert res == resp200
+    assert mock_super_handle.call_count == 2
+    mock_sleep.assert_called_once_with(1.0)
+    assert "Failed to parse Retry-After header as date" in caplog.text
+    resp429.close.assert_called_once()
+
+
+def test_retry_transport_exponential_backoff(mocker: MockerFixture) -> None:
+    mock_sleep = mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("openqa_investigate.httpx.HTTPTransport.handle_request")
+
+    resp429_1 = MagicMock(spec=httpx.Response)
+    resp429_1.status_code = 429
+    resp429_1.headers = httpx.Headers({})
+
+    resp429_2 = MagicMock(spec=httpx.Response)
+    resp429_2.status_code = 429
+    resp429_2.headers = httpx.Headers({})
+
+    resp200 = MagicMock(spec=httpx.Response)
+    resp200.status_code = 200
+
+    mock_super_handle.side_effect = [resp429_1, resp429_2, resp200]
+
+    transport = openqa_investigate.RetryTransport(retries=3)
+    req = httpx.Request("GET", "http://example.com")
+    res = transport.handle_request(req)
+
+    assert res == resp200
+    assert mock_super_handle.call_count == 3
+    mock_sleep.assert_has_calls([mocker.call(1.0), mocker.call(2.0)])
+    resp429_1.close.assert_called_once()
+    resp429_2.close.assert_called_once()
+
+
+def test_retry_transport_exhausted_retries(mocker: MockerFixture) -> None:
+    mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("openqa_investigate.httpx.HTTPTransport.handle_request")
+
+    resp429 = MagicMock(spec=httpx.Response)
+    resp429.status_code = 429
+    resp429.headers = httpx.Headers({})
+
+    mock_super_handle.return_value = resp429
+
+    transport = openqa_investigate.RetryTransport(retries=1)
+    req = httpx.Request("GET", "http://example.com")
+    res = transport.handle_request(req)
+
+    assert res == resp429
+    assert mock_super_handle.call_count == 2
+
+
+def test_retry_transport_now() -> None:
+    assert openqa_investigate.RetryTransport._now().tzinfo == datetime.UTC
+
+
+def test_retry_transport_wait_strategy_non_transient() -> None:
+    transport = openqa_investigate.RetryTransport()
+    fake_state = MagicMock()
+    fake_state.outcome.exception.return_value = ValueError("not transient")
+    assert transport._wait_strategy(fake_state) == pytest.approx(0.0)
+
+
+def test_retry_transport_before_sleep_non_transient() -> None:
+    transport = openqa_investigate.RetryTransport()
+    fake_state = MagicMock()
+    fake_state.outcome.exception.return_value = ValueError("not transient")
+    transport._before_sleep(fake_state)
 
 
 def test_client_get_dependencies_ajax_fallback(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
@@ -954,6 +1140,10 @@ def test_run_investigation_logic(mocker: MockerFixture) -> None:
     openqa_investigate.run_investigation_logic(client_quiet, 2)
     mock_fin.assert_not_called()
 
+    # Success path with empty out
+    mocker.patch.object(openqa_investigate, "trigger_jobs", return_value="")
+    openqa_investigate.run_investigation_logic(client_quiet, 2)
+
 
 def test_main(mocker: MockerFixture) -> None:
     # Invalid job_id / URL -> Exit(1)
@@ -1003,6 +1193,12 @@ def test_main(mocker: MockerFixture) -> None:
     client_custom = mock_run.call_args[0][0]
     assert client_custom.http_timeout == pytest.approx(45.0)
     assert client_custom.investigation_timeout == pytest.approx(60.0)
+
+    # VERBOSE environment variable
+    mocker.patch.dict("os.environ", {"VERBOSE": "1"})
+    mock_setup = mocker.patch.object(openqa_investigate, "setup_logging")
+    openqa_investigate.main("1234")
+    mock_setup.assert_called_with(1)
 
 
 def test_main_entrypoint(mocker: MockerFixture) -> None:

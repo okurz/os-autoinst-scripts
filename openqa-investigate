@@ -4,17 +4,19 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import os
 import re
 import subprocess
 import sys
-import time
+from email.utils import parsedate_to_datetime
 from typing import Annotated, Any
 from urllib.parse import urlparse
 
 import httpx
+import tenacity
 import typer
 
 HTTP_NOT_FOUND = 404
@@ -33,6 +35,90 @@ def setup_logging(verbose: int) -> None:
     }
     level = level_map.get(min(verbose, 2), logging.WARNING)
     logging.basicConfig(level=level, format="%(levelname)s: %(message)s", stream=sys.stderr, force=True)
+
+
+class TransientHTTPError(Exception):
+    """Exception raised for HTTP responses with transient status codes."""
+
+    def __init__(self, response: httpx.Response) -> None:
+        """Initialize the exception with the HTTP response."""
+        super().__init__(f"HTTP {response.status_code}")
+        self.response = response
+
+
+class RetryTransport(httpx.HTTPTransport):
+    """Custom HTTP transport that retries on transient errors (e.g. 429, 5xx)."""
+
+    RETRY_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
+
+    def __init__(self, retries: int = 1, **kwargs: Any) -> None:  # ruff: ignore[any-type]
+        """Initialize the RetryTransport with a configurable number of retries."""
+        super().__init__(**kwargs)
+        self.retries = retries
+
+    @staticmethod
+    def _now() -> datetime.datetime:
+        return datetime.datetime.now(datetime.UTC)
+
+    def _check_and_raise(self, response: httpx.Response) -> None:
+        if response.status_code in self.RETRY_STATUS_CODES:
+            raise TransientHTTPError(response)
+
+    def _wait_strategy(self, retry_state: tenacity.RetryCallState) -> float:
+        exc = retry_state.outcome.exception()
+        if not isinstance(exc, TransientHTTPError):
+            return 0.0
+        response = exc.response
+        retry_after = response.headers.get("Retry-After")
+        delay = 0.0
+        if retry_after:
+            try:
+                delay = float(retry_after)
+            except ValueError:
+                try:
+                    dt = parsedate_to_datetime(retry_after)
+                    delay = (dt - self._now()).total_seconds()
+                except (TypeError, ValueError) as e:
+                    log.debug("Failed to parse Retry-After header as date: %s", e)
+
+        if delay <= 0.0:
+            delay = float(2 ** (retry_state.attempt_number - 1))
+
+        return delay
+
+    def _before_sleep(self, retry_state: tenacity.RetryCallState) -> None:
+        exc = retry_state.outcome.exception()
+        if isinstance(exc, TransientHTTPError):
+            response = exc.response
+            response.close()
+
+            retries_left = self.retries - retry_state.attempt_number
+            delay = retry_state.next_action.sleep
+
+            log.warning(
+                "Received HTTP %d. Retrying in %.2f seconds (%d retries left)...",
+                response.status_code,
+                delay,
+                retries_left,
+            )
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        """Handle the HTTP request, retrying on transient status codes if retries are available."""
+        try:
+            for attempt in tenacity.Retrying(
+                retry=tenacity.retry_if_exception_type(TransientHTTPError),
+                stop=tenacity.stop_after_attempt(self.retries + 1),
+                wait=self._wait_strategy,
+                before_sleep=self._before_sleep,
+                reraise=True,
+            ):
+                with attempt:
+                    response = super().handle_request(request)
+                    self._check_and_raise(response)
+        except TransientHTTPError as e:
+            return e.response
+
+        return response
 
 
 class OpenQAClient:
@@ -93,35 +179,31 @@ class OpenQAClient:
         return {"raw_output": stdout}
 
     def _get_http(self, path: str, *, timeout: float | None = None) -> dict[str, Any]:
+        if self.retries < 0:
+            return {}
         url = f"{self.host_url}/{path.lstrip('/')}"
         log.debug("HTTP GET: %s", url)
 
         headers = {"User-Agent": USER_AGENT}
         req_timeout = timeout if timeout is not None else self.http_timeout
+        transport = RetryTransport(retries=self.retries)
 
-        for attempt in range(self.retries + 1):
-            try:
-                with httpx.Client(headers=headers, follow_redirects=True, timeout=req_timeout) as client:
-                    response = client.get(url)
-                    response.raise_for_status()
-                    res_json = response.json()
-                    if isinstance(res_json, dict):
-                        return res_json
-                    return {"data": res_json}
-            except Exception as e:
-                if attempt < self.retries:
-                    log.warning(
-                        "HTTP GET failed (attempt %d/%d): %s. Retrying in %d seconds...",
-                        attempt + 1,
-                        self.retries + 1,
-                        e,
-                        self.retry_sleep_time,
-                    )
-                    time.sleep(self.retry_sleep_time)
-                else:
-                    log.exception("HTTP GET failed after %d attempts", self.retries + 1)
-                    raise
-        return {}
+        try:
+            with httpx.Client(
+                transport=transport,
+                headers=headers,
+                follow_redirects=True,
+                timeout=req_timeout,
+            ) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                res_json = response.json()
+                if isinstance(res_json, dict):
+                    return res_json
+                return {"data": res_json}
+        except Exception:
+            log.exception("HTTP GET failed after %d attempts", self.retries + 1)
+            raise
 
     def get_job_status(self, job_id: int) -> dict[str, Any]:
         args = ["--json", f"experimental/jobs/{job_id}/status"]
