@@ -37,6 +37,7 @@ class RebootMethod(StrEnum):
 HYPERVISORS = {
     "s390zl12.oqa.prg2.suse.org": ["worker31", "worker32"],
     "s390zl13.oqa.prg2.suse.org": ["worker32", "worker33"],
+    "s390zl19.oqa.prg2.suse.org": ["worker31"],
 }
 
 RET_SUCCESS = 0
