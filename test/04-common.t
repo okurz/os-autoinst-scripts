@@ -2,7 +2,7 @@
 
 source test/init
 
-plan tests 27
+plan tests 29
 
 source ./_common
 
@@ -108,3 +108,16 @@ osc=mock_osc_fail
 try list_packages devel:openQA:testing
 is "$rc" 1 "list_packages propagates osc failure"
 is "$got" "" "list_packages emits no output on osc failure"
+
+# openqa-api-get uses default retries
+mock_openqa_cli() {
+    echo "$@"
+    return 0
+}
+openqa_cli_orig=$(which openqa-cli 2> /dev/null || echo "")
+openqa-cli() { mock_openqa_cli "$@"; }
+host_url="https://openqa.example.com"
+try openqa-api-get "jobs/123"
+is "$rc" 0 "openqa-api-get success"
+has "$got" "--retries" "openqa-api-get enables retries by default"
+unset -f openqa-cli

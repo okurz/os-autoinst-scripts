@@ -143,7 +143,7 @@ runcurl() {
 }
 
 openqa-api-get() {
-    client_args=(api --header 'User-Agent: openqa-investigate (https://github.com/os-autoinst/os-autoinst-scripts)' --host "$host_url")
+    client_args=(api --header 'User-Agent: openqa-investigate (https://github.com/os-autoinst/os-autoinst-scripts)' --host "$host_url" --retries "${OPENQA_CLI_RETRIES:-11}")
     local rc response
     set +e
     response=$(openqa-cli "${client_args[@]}" --json "$@" 2>&1)
