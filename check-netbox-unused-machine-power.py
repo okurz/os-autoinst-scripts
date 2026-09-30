@@ -33,7 +33,10 @@ def snmp_get(host: str, community: str, oid: str) -> int:
     """Retrieve a single integer SNMP value by OID from the given host."""
     if debug:
         print(f"snmp_get({host=}, {community=}, {oid=})")
-    return int(netsnmp.snmpget(oid, Version=1, DestHost=host, Community=community)[0])
+    value = netsnmp.snmpget(oid, Version=1, DestHost=host, Community=community)[0]
+    if not value:
+        print(f"{oid} for community '{community}' on {host} returned non-numerical value '{value}'.", file=sys.stderr)
+    return int(value or 0)
 
 
 def pdu_get_power(host: str, outlet: int) -> tuple[int, bool]:
