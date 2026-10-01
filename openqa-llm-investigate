@@ -84,7 +84,7 @@ class RetryTransport(httpx.HTTPTransport):
             retries_left = self.retries - retry_state.attempt_number
             delay = retry_state.next_action.sleep
 
-            log.warning(
+            log.info(
                 "Received HTTP %d. Retrying in %.2f seconds (%d retries left)...",
                 response.status_code,
                 delay,
