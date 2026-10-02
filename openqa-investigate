@@ -358,7 +358,7 @@ def query_dependency_data_or_postpone(client: OpenQAClient, job_id: int) -> dict
                 pending_count += 1
 
     if pending_count > 0:
-        log.warning(
+        log.info(
             "Postponing to investigate job %s: waiting until %s pending parallel job(s) finished", job_id, pending_count
         )
         raise typer.Exit(code=142)
@@ -387,7 +387,7 @@ def sync_via_investigation_comment(
     first_comment_id = min(int(c["id"]) for c in inv_comments if "id" in c)
 
     if comment_id != first_comment_id and not force:
-        log.warning(
+        log.info(
             "Skipping investigation of job %s: job cluster is already being investigated, see comment on job %s",
             job_id,
             first_cluster_job_id,
@@ -442,7 +442,7 @@ def _prepare_refspec_settings(  # ruff: ignore[too-many-arguments, too-many-posi
 
     if testgiturl:
         if not testgiturl.startswith(("http://", "https://")) or " " in testgiturl:
-            log.warning(
+            log.info(
                 "Can not clone refspec of job %s with unknown/invalid git url TEST_GIT_URL='%s'", origin, testgiturl
             )
             return ["INVALID_URL"], name_ext
@@ -735,7 +735,7 @@ def fetch_investigation_results(client: OpenQAClient, origin_job_id: int) -> lis
             job_status_data = client.get_job_status(other_id)
             state = job_status_data.get("state")
             if state not in {"done", "cancelled"}:
-                log.warning("Investigation job %s is not finished (state: %s)", other_id, state)
+                log.info("Investigation job %s is not finished (state: %s)", other_id, state)
                 raise typer.Exit(code=142)
 
             result = job_status_data.get("result", "")
@@ -900,7 +900,7 @@ def run_investigation_logic(  # ruff: ignore[too-many-arguments, complex-structu
 
     clone_id = job_info.get("clone_id")
     if not force and clone_id is not None:
-        log.warning(
+        log.info(
             "Job %s already has a clone, skipping investigation. "
             "Use the env variable 'force=true' to trigger investigation jobs",
             job_id,
