@@ -141,7 +141,11 @@ create_devel_openqa_snapshot() {
         fi
         dst_rev=$(last_revision "$dst_project" "$package" "$dst_project")
         log-info "Last revision for '$dst_project/$package': $dst_rev"
-        debug_osc co --server-side-source-service-files "$src_project"/"$package"
+        if [[ -e "$src_project"/"$package" ]]; then
+            debug_osc up --server-side-source-service-files "$src_project"/"$package"
+        else
+            debug_osc co --server-side-source-service-files "$src_project"/"$package"
+        fi
         sync_changesrevision "$src_project" "$package" "$dst_rev"
         create_snapshots "$package"
     done
