@@ -41,9 +41,9 @@ def test_fetch_json_success() -> None:
 
     # With explicit timeout
     mock_client.get.reset_mock()
-    res_timeout = llm_investigate.fetch_json(mock_client, "http://example.com", timeout=120.0)
+    res_timeout = llm_investigate.fetch_json(mock_client, "http://example.com", timeout=900.0)
     assert res_timeout == {"foo": "bar"}
-    mock_client.get.assert_called_once_with("http://example.com", params=None, timeout=120.0)
+    mock_client.get.assert_called_once_with("http://example.com", params=None, timeout=900.0)
 
 
 def test_fetch_json_failure() -> None:
@@ -169,7 +169,7 @@ def test_investigate_cmd(mocker: MockerFixture) -> None:
     assert "BISECT: YES" in mock_post.call_args[0][2]
     ajax_calls = [call for call in client.get.call_args_list if "investigation_ajax" in call[0][0]]
     assert len(ajax_calls) == 1
-    assert ajax_calls[0][1]["timeout"] == pytest.approx(120.0)
+    assert ajax_calls[0][1]["timeout"] == pytest.approx(900.0)
 
 
 def test_investigate_cmd_with_token(mocker: MockerFixture) -> None:

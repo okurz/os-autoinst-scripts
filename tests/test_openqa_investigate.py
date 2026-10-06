@@ -466,11 +466,11 @@ def test_client_get_dependencies_ajax_fallback(mocker: MockerFixture, caplog: py
 def test_client_endpoints(mocker: MockerFixture) -> None:
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
     assert client.http_timeout == pytest.approx(90.0)
-    assert client.investigation_timeout == pytest.approx(120.0)
+    assert client.investigation_timeout == pytest.approx(900.0)
     mock_http = mocker.patch.object(client, "_get_http", return_value={"data": 1})
 
     assert client.get_investigation_ajax(123) == {"data": 1}
-    mock_http.assert_called_with("tests/123/investigation_ajax", timeout=120.0)
+    mock_http.assert_called_with("tests/123/investigation_ajax", timeout=900.0)
 
     assert client.get_vars_json(123) == {"data": 1}
     mock_http.assert_called_with("tests/123/file/vars.json")
@@ -1176,7 +1176,7 @@ def test_main(mocker: MockerFixture) -> None:
     assert client_arg.retry_sleep_time == 10
     assert client_arg.dry_run is True
     assert client_arg.http_timeout == pytest.approx(90.0)
-    assert client_arg.investigation_timeout == pytest.approx(120.0)
+    assert client_arg.investigation_timeout == pytest.approx(900.0)
     assert mock_run.call_args[0][1] == 1234
     kwargs = mock_run.call_args[1]
     assert kwargs["extra_settings"] == ["FOO=BAR"]

@@ -21,7 +21,7 @@ import typer
 
 USER_AGENT = "openqa-llm-investigate (https://github.com/os-autoinst/os-autoinst-scripts)"
 DEFAULT_OPENQA_TIMEOUT: float = 90.0
-DEFAULT_INVESTIGATION_TIMEOUT: float = 120.0
+DEFAULT_INVESTIGATION_TIMEOUT: float = 900.0
 
 log = logging.getLogger(__name__)
 
