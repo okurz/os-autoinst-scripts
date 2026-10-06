@@ -52,6 +52,11 @@ def test_setup_logging(mocker: MockerFixture, verbose_count: int, expected_level
     )
 
 
+def test_format_mode() -> None:
+    assert openqa_investigate.format_mode(strict=True) == "strict"
+    assert openqa_investigate.format_mode(strict=False) == "non-strict"
+
+
 @pytest.mark.parametrize(
     ("job_url_arg", "default_scheme", "default_host", "expected"),
     [
@@ -86,6 +91,10 @@ def test_client_init() -> None:
     assert client.retries == 3
     assert client.retry_sleep_time == 20
     assert not client.dry_run
+    assert not client.strict
+
+    client_strict = openqa_investigate.OpenQAClient("https://openqa.opensuse.org/", strict=True)
+    assert client_strict.strict
 
 
 def test_client_run_openqa_cli(mocker: MockerFixture) -> None:
@@ -472,6 +481,9 @@ def test_client_endpoints(mocker: MockerFixture) -> None:
     assert client.get_investigation_ajax(123) == {"data": 1}
     mock_http.assert_called_with("tests/123/investigation_ajax", timeout=900.0)
 
+    assert client.get_investigation_ajax(123, strict=True) == {"data": 1}
+    mock_http.assert_called_with("tests/123/investigation_ajax?strict=1", timeout=900.0)
+
     assert client.get_vars_json(123) == {"data": 1}
     mock_http.assert_called_with("tests/123/file/vars.json")
 
@@ -617,6 +629,13 @@ def test_build_clone_settings(mocker: MockerFixture) -> None:
     assert "PUBLISH_HDD=none" in settings
     assert "PUBLISH_ISO=none" in settings
     assert "OPENQA_INVESTIGATE_ORIGIN=https://openqa.opensuse.org/t10" in settings
+    assert "OPENQA_INVESTIGATE_STRICT=1" not in settings
+
+    # Strict mode settings
+    settings_strict, _ = openqa_investigate._build_clone_settings(
+        client, job_info, 10, "suffix", "ref", ["EXTRA=1"], 42, strict=True
+    )
+    assert "OPENQA_INVESTIGATE_STRICT=1" in settings_strict
 
 
 def test_clone(mocker: MockerFixture) -> None:
@@ -687,6 +706,15 @@ def test_trigger_regression_jobs(mocker: MockerFixture) -> None:
     openqa_investigate._trigger_regression_jobs(client, 1, 2, inv4, None, 0, 100, lines)
     assert lines == ["line_build"]
 
+    # 5. Strict mode enabled: triggers last_good_tests and skips steps 3 and 4
+    lines.clear()
+    inv5 = {"test_log": "Changes detected", "BUILD": "999"}
+    mock_clone.reset_mock()
+    mock_clone.side_effect = ["line_tests"]
+    openqa_investigate._trigger_regression_jobs(client, 1, 2, inv5, None, 0, 100, lines, strict=True)
+    assert lines == ["line_tests"]
+    assert mock_clone.call_count == 1
+
 
 def test_trigger_jobs(mocker: MockerFixture) -> None:
     client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
@@ -708,11 +736,25 @@ def test_trigger_jobs(mocker: MockerFixture) -> None:
     mocker.patch.object(openqa_investigate, "clone", return_value="retry_line")
     mocker.patch.object(client, "get_investigation_ajax", return_value={"last_good": {"text": "456"}})
     mock_regr = mocker.patch.object(
-        openqa_investigate, "_trigger_regression_jobs", side_effect=lambda *args: args[7].append("regr_line")
+        openqa_investigate,
+        "_trigger_regression_jobs",
+        side_effect=lambda *args, **_kwargs: args[7].append("regr_line"),
     )
     out = openqa_investigate.trigger_jobs(client, 1, None, 0, 100)
     assert out == "retry_line\nregr_line"
     mock_regr.assert_called_once()
+    assert mock_regr.call_args[1]["strict"] is False
+
+    # Valid last_good with strict=True
+    client_strict = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", strict=True)
+    mock_get_ajax = mocker.patch.object(
+        client_strict, "get_investigation_ajax", return_value={"last_good": {"text": "456"}}
+    )
+    mock_regr.reset_mock()
+    out_strict = openqa_investigate.trigger_jobs(client_strict, 1, None, 0, 100)
+    assert out_strict == "retry_line\nregr_line"
+    mock_get_ajax.assert_called_once_with(1)
+    assert mock_regr.call_args[1]["strict"] is True
 
 
 def test_should_exclude_job() -> None:
@@ -858,12 +900,20 @@ def test_finalize_investigation_comment(mocker: MockerFixture) -> None:
 
     mock_del.reset_mock()
 
-    # Test finalize on same job
+    # Test finalize on same job (non-strict mode)
     openqa_investigate.finalize_investigation_comment(client, 1, 1, "123", "out text")
     mock_del.assert_not_called()
     mock_put.assert_called_once()
     mock_post.assert_not_called()
-    assert "Automatic investigation jobs for job 1:\n\nout text" in mock_put.call_args[0][2]
+    assert "Automatic investigation jobs for job 1 (non-strict mode):\n\nout text" in mock_put.call_args[0][2]
+
+    mock_put.reset_mock()
+
+    # Test finalize with strict=True
+    client.strict = True
+    openqa_investigate.finalize_investigation_comment(client, 1, 1, "123", "out text")
+    assert "Automatic investigation jobs for job 1 (strict mode):\n\nout text" in mock_put.call_args[0][2]
+    client.strict = False
 
     mock_put.reset_mock()
 
@@ -1002,6 +1052,13 @@ def test_build_investigation_comment(mocker: MockerFixture) -> None:
     )
     assert "Likely a sporadic failure" in c1
     assert "label:force_result:passed:retry_job_passed" in c1
+    assert "non-strict mode" in c1
+
+    # Passed with strict=True
+    c_strict = openqa_investigate._build_investigation_comment(
+        client, 1, "test:investigate:retry", "passed", {}, 50, strict=True
+    )
+    assert "strict mode" in c_strict
 
     # Passed without force status
     c2 = openqa_investigate._build_investigation_comment(
@@ -1063,6 +1120,18 @@ def test_post_investigate(mocker: MockerFixture, caplog: pytest.LogCaptureFixtur
     # Normal successful comment posting (does not raise)
     mocker.patch.object(client, "post_job_comment", return_value={"id": 123})
     openqa_investigate.post_investigate(client, 1, "test:investigate:retry", {})
+
+    # Strict mode detected from settings
+    mock_build = mocker.patch.object(openqa_investigate, "_build_investigation_comment", return_value="strict comment")
+    openqa_investigate.post_investigate(
+        client, 1, "test:investigate:retry", {"job": {"settings": {"OPENQA_INVESTIGATE_STRICT": "1"}}}
+    )
+    assert mock_build.call_args[1]["strict"] is True
+
+    # Strict mode passed explicitly
+    mock_build.reset_mock()
+    openqa_investigate.post_investigate(client, 1, "test:investigate:retry", {}, strict=True)
+    assert mock_build.call_args[1]["strict"] is True
 
     # Unexpected error response -> Exit(2)
     mocker.patch.object(client, "post_job_comment", return_value={"error": "Something exploded"})
@@ -1145,6 +1214,21 @@ def test_run_investigation_logic(mocker: MockerFixture) -> None:
     openqa_investigate.run_investigation_logic(client_quiet, 2)
 
 
+def test_run_investigation_logic_strict(mocker: MockerFixture) -> None:
+    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
+    mocker.patch.object(client, "get_job", return_value={"job": {"test": "foo"}})
+    mocker.patch.object(openqa_investigate, "_should_exclude_job", return_value=False)
+    mocker.patch.object(openqa_investigate, "query_dependency_data_or_postpone", return_value={"cluster": [[1, 2]]})
+    mocker.patch.object(openqa_investigate, "sync_via_investigation_comment", return_value="123")
+    mock_trig = mocker.patch.object(openqa_investigate, "trigger_jobs", return_value="out text")
+    mock_fin = mocker.patch.object(openqa_investigate, "finalize_investigation_comment")
+
+    openqa_investigate.run_investigation_logic(client, 2, strict=True)
+    assert client.strict is True
+    mock_trig.assert_called_once_with(client, 2, None, 0, 100)
+    mock_fin.assert_called_once_with(client, 2, 1, "123", "out text")
+
+
 def test_main(mocker: MockerFixture) -> None:
     # Invalid job_id / URL -> Exit(1)
     with pytest.raises(typer.Exit) as exc:
@@ -1175,6 +1259,7 @@ def test_main(mocker: MockerFixture) -> None:
     assert client_arg.retries == 5
     assert client_arg.retry_sleep_time == 10
     assert client_arg.dry_run is True
+    assert client_arg.strict is False
     assert client_arg.http_timeout == pytest.approx(90.0)
     assert client_arg.investigation_timeout == pytest.approx(900.0)
     assert mock_run.call_args[0][1] == 1234
@@ -1186,6 +1271,12 @@ def test_main(mocker: MockerFixture) -> None:
     assert kwargs["exclude_no_group"] is False
     assert kwargs["exclude_group_regex"] == "group_excl"
     assert kwargs["force"] is True
+    assert kwargs["strict"] is False
+
+    # Invocation with --strict
+    mock_run.reset_mock()
+    openqa_investigate.main("1234", strict=True)
+    assert mock_run.call_args[1]["strict"] is True
 
     # Custom timeouts passed to main
     mock_run.reset_mock()
