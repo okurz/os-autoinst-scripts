@@ -108,7 +108,20 @@ sync_changesrevision() {
     local dir=$1
     local package=$2
     local dst_rev=$3
+    local count=0
     path="$dir/$package"
+    local servicedatafile="$path"/_service:obs_scm:_servicedata
+    if [[ -e "$servicedatafile" ]]; then
+        # If this file has more than one <service> entry, it's likely because
+        # of some change in the _service file, and this needs to be fixed
+        # manually
+        count=$("$XMLSTARLET" sel -t -v "count(//service)" "$servicedatafile")
+        if [[ $count -ne 1 ]]; then
+            warn "'$servicedatafile' looks broken, please fix '$path/_servicedata' manually"
+            cat "$servicedatafile" >&2
+            exit 1
+        fi
+    fi
     $client_prefix "$XMLSTARLET" ed -L -u "//param[@name='changesrevision']" -v "$dst_rev" "$path"/_servicedata
     if ! diff -u "$path"/.osc/sources/_servicedata "$path"/_servicedata; then
         debug_osc up "$path"
