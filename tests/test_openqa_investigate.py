@@ -706,14 +706,23 @@ def test_trigger_regression_jobs(mocker: MockerFixture) -> None:
     openqa_investigate._trigger_regression_jobs(client, 1, 2, inv4, None, 0, 100, lines)
     assert lines == ["line_build"]
 
-    # 5. Strict mode enabled: triggers last_good_tests and skips steps 3 and 4
+    # 5. Strict mode with same build as last good: triggers last_good_tests and skips steps 3 and 4
     lines.clear()
-    inv5 = {"test_log": "Changes detected", "BUILD": "999"}
+    inv5 = {"test_log": "Changes detected"}
     mock_clone.reset_mock()
     mock_clone.side_effect = ["line_tests"]
     openqa_investigate._trigger_regression_jobs(client, 1, 2, inv5, None, 0, 100, lines, strict=True)
     assert lines == ["line_tests"]
     assert mock_clone.call_count == 1
+
+    # 6. Strict mode with different build (e.g. multi-build PR): triggers steps 2, 3 and 4
+    lines.clear()
+    inv6 = {"test_log": "Changes detected", "BUILD": "999"}
+    mock_clone.reset_mock()
+    mock_clone.side_effect = ["line_tests", "line_build", "line_both"]
+    openqa_investigate._trigger_regression_jobs(client, 1, 2, inv6, None, 0, 100, lines, strict=True)
+    assert lines == ["line_tests", "line_build", "line_both"]
+    assert mock_clone.call_count == 3
 
 
 def test_trigger_jobs(mocker: MockerFixture) -> None:

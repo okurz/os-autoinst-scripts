@@ -615,10 +615,6 @@ def _trigger_regression_jobs(  # ruff: ignore[too-many-arguments, too-many-posit
             )
         )
 
-    if strict:
-        log.info("Strict mode enabled: skipping product regression investigation jobs (steps 3 and 4)")
-        return
-
     last_good_build = ""
     inv_str = json.dumps(investigation)
     if "BUILD" not in inv_str:
