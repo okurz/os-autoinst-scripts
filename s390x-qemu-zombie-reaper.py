@@ -10,6 +10,7 @@ if any are found, while also retriggering the affected openQA jobs.
 
 from __future__ import annotations
 
+import concurrent.futures
 import contextlib
 import fcntl
 import json
@@ -338,6 +339,19 @@ def handle_host(
         print(f"Host {host} is clean and libvirt is healthy.")
 
 
+def reap_all_hosts(config: ReaperConfig, concurrency: int = len(HYPERVISORS)) -> None:
+    """Check all hypervisors, concurrently or sequentially based on concurrency."""
+    if concurrency <= 1:
+        for host in HYPERVISORS:
+            handle_host(host, config)
+        return
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = [executor.submit(handle_host, host, config) for host in HYPERVISORS]
+        for future in concurrent.futures.as_completed(futures):
+            future.result()
+
+
 @app.command()
 def reap(  # ruff: ignore[too-many-arguments]
     *,
@@ -359,6 +373,10 @@ def reap(  # ruff: ignore[too-many-arguments]
         int,
         typer.Option("--cmd-timeout", help="Default timeout in seconds for shell commands"),
     ] = 60,
+    concurrency: Annotated[
+        int,
+        typer.Option("--concurrency", help="Number of concurrent host checks (1 for sequential)"),
+    ] = len(HYPERVISORS),
     lock_file: Annotated[
         Path | None,
         typer.Option("--lock-file", help="Path to lockfile to prevent concurrent execution"),
@@ -378,8 +396,7 @@ def reap(  # ruff: ignore[too-many-arguments]
         cmd_timeout=cmd_timeout,
     )
     if no_lock:
-        for host in HYPERVISORS:
-            handle_host(host, config)
+        reap_all_hosts(config, concurrency)
         return
 
     resolved_lock_file = lock_file or DEFAULT_LOCK_FILE
@@ -387,8 +404,7 @@ def reap(  # ruff: ignore[too-many-arguments]
         if not acquired:
             print(f"Another instance is already running (lockfile: {resolved_lock_file}). Exiting.")
             raise typer.Exit(code=0)
-        for host in HYPERVISORS:
-            handle_host(host, config)
+        reap_all_hosts(config, concurrency)
 
 
 if __name__ == "__main__":
