@@ -1,0 +1,402 @@
+#!/usr/bin/env python3
+# Copyright SUSE LLC
+# ruff: file-ignore[print]
+"""Audit openQA jobs to identify and report likely unused assets.
+
+Fetches latest jobs and asset sizes from the openQA API and applies heuristics
+to detect candidate assets that jobs link but are unlikely to need, aggregating
+the results by job group and test suite.
+"""
+
+from __future__ import annotations
+
+import argparse
+import fnmatch
+import json
+import logging
+import re
+import sys
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+import httpx
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+log = logging.getLogger("openqa-find-unused-job-assets")
+
+USER_AGENT = "openqa-find-unused-job-assets (https://github.com/os-autoinst/os-autoinst-scripts)"
+DEFAULT_HOST = "https://openqa.opensuse.org"
+CANDIDATE_NOTE = "Candidates only: some tests might still use assets (e.g. ISO) as repo media"
+PAGE_LIMIT = 10000
+DEFAULT_TIMEOUT = 120.0
+
+
+@dataclass(frozen=True)
+class CandidateAsset:
+    """Represents a single candidate unused asset detected for a job."""
+
+    setting: str
+    asset_name: str
+    size: int
+    reason: str
+
+
+@dataclass(frozen=True)
+class AggregatedCandidate:
+    """Represents candidate unused assets aggregated by job group and test suite."""
+
+    group: str
+    group_id: int | None
+    test_suite: str
+    job_count: int
+    candidate_settings: list[str]
+    total_bytes: int
+    reasons: dict[str, str]
+
+
+def parse_args(args: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Audit openQA jobs and report likely unused assets aggregated by job group and test suite."
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=1,
+        help="Increase verbosity level, specify multiple times to increase verbosity",
+    )
+    parser.add_argument(
+        "--host",
+        default=DEFAULT_HOST,
+        help=f"openQA host URL (default: {DEFAULT_HOST})",
+    )
+    parser.add_argument(
+        "--group",
+        type=int,
+        default=None,
+        help="Optional filter by job group ID",
+    )
+    parser.add_argument(
+        "--build",
+        default=None,
+        help="Optional filter by build",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format: text or json (default: text)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_TIMEOUT,
+        help=f"HTTP request timeout in seconds (default: {DEFAULT_TIMEOUT})",
+    )
+    parsed = parser.parse_args(args)
+    verbose_to_log = {
+        0: logging.CRITICAL,
+        1: logging.ERROR,
+        2: logging.WARNING,
+        3: logging.INFO,
+        4: logging.DEBUG,
+    }
+    max_verbose = 4
+    logging_level = logging.DEBUG if parsed.verbose > max_verbose else verbose_to_log[parsed.verbose]
+    log.setLevel(logging_level)
+    return parsed
+
+
+def is_vagrant_box(filename: str) -> bool:
+    """Check if a filename looks like a vagrant box asset."""
+    lower = filename.lower()
+    return fnmatch.fnmatch(lower, "*.vagrant.*.box") or bool(re.search(r"\.vagrant\..*\.box$", filename, re.IGNORECASE))
+
+
+def relates_to_vagrant(job: dict[str, Any], candidate_keys: set[str]) -> bool:
+    """Determine whether a job's name, test suite, or other settings relate to vagrant."""
+    test_suite = str(job.get("test") or (job.get("settings") or {}).get("TEST") or "").lower()
+    if "vagrant" in test_suite:
+        return True
+
+    job_name = str(job.get("name") or "").lower()
+    if "vagrant" in job_name:
+        return True
+
+    settings: dict[str, Any] = job.get("settings") or {}
+    for key, value in settings.items():
+        if key in candidate_keys:
+            continue
+        if "vagrant" in str(key).lower() or "vagrant" in str(value).lower():
+            return True
+
+    return False
+
+
+def find_job_candidate_assets(job: dict[str, Any], asset_sizes: dict[str, int]) -> list[CandidateAsset]:
+    """Inspect job settings and flag assets that are likely unused based on heuristics."""
+    settings: dict[str, Any] = job.get("settings") or {}
+    candidates: list[CandidateAsset] = []
+
+    iso = str(settings.get("ISO") or "").strip()
+    boot_hdd = str(settings.get("BOOT_HDD_IMAGE") or "").strip()
+    hdd_1 = str(settings.get("HDD_1") or "").strip()
+
+    iso_candidate = False
+    if iso and boot_hdd in {"1", "true"} and hdd_1:
+        iso_candidate = True
+        candidates.append(
+            CandidateAsset(
+                setting="ISO",
+                asset_name=iso,
+                size=asset_sizes.get(iso, 0),
+                reason="ISO set while BOOT_HDD_IMAGE=1 and HDD_1 set",
+            )
+        )
+
+    asset_256 = str(settings.get("ASSET_256") or "").strip()
+    if iso_candidate and asset_256:
+        candidates.append(
+            CandidateAsset(
+                setting="ASSET_256",
+                asset_name=asset_256,
+                size=asset_sizes.get(asset_256, 0),
+                reason="ASSET_256 (ISO checksum) set while ISO likely unused",
+            )
+        )
+
+    vagrant_keys = {
+        key
+        for key, val in settings.items()
+        if key.startswith("ASSET_") and key != "ASSET_256" and is_vagrant_box(str(val).strip())
+    }
+
+    if vagrant_keys and not relates_to_vagrant(job, vagrant_keys):
+        for key in sorted(vagrant_keys):
+            asset_name = str(settings[key]).strip()
+            candidates.append(
+                CandidateAsset(
+                    setting=key,
+                    asset_name=asset_name,
+                    size=asset_sizes.get(asset_name, 0),
+                    reason=f"{key} containing .vagrant. box set while test name/settings do not relate to vagrant",
+                )
+            )
+
+    return candidates
+
+
+def aggregate_candidates(
+    jobs: list[dict[str, Any]],
+    asset_sizes: dict[str, int],
+) -> list[AggregatedCandidate]:
+    """Aggregate candidate unused assets by job group and test suite."""
+    log.info("Analyzing %d jobs for candidate unused assets", len(jobs))
+    grouped: dict[tuple[str, int | None, str], dict[str, Any]] = {}
+
+    for job in jobs:
+        candidates = find_job_candidate_assets(job, asset_sizes)
+        if not candidates:
+            continue
+
+        raw_group_id = job.get("group_id")
+        group_id = int(raw_group_id) if raw_group_id is not None else None
+        group_name = str(job.get("group") or (f"Group {group_id}" if group_id is not None else "Unknown"))
+        test_suite = str(job.get("test") or (job.get("settings") or {}).get("TEST") or "Unknown")
+
+        log.debug(
+            "Job %s (%s, test: %s): found %d candidate unused asset(s)",
+            job.get("id"),
+            group_name,
+            test_suite,
+            len(candidates),
+        )
+
+        key = (group_name, group_id, test_suite)
+        if key not in grouped:
+            grouped[key] = {
+                "job_count": 0,
+                "candidate_settings": set(),
+                "total_bytes": 0,
+                "reasons": {},
+            }
+
+        entry = grouped[key]
+        entry["job_count"] += 1
+        entry["total_bytes"] += sum(cand.size for cand in candidates)
+        for cand in candidates:
+            entry["candidate_settings"].add(cand.setting)
+            entry["reasons"][cand.setting] = cand.reason
+
+    aggregated = [
+        AggregatedCandidate(
+            group=group_name,
+            group_id=group_id,
+            test_suite=test_suite,
+            job_count=data["job_count"],
+            candidate_settings=sorted(data["candidate_settings"]),
+            total_bytes=data["total_bytes"],
+            reasons=data["reasons"],
+        )
+        for (group_name, group_id, test_suite), data in grouped.items()
+    ]
+
+    aggregated.sort(key=lambda item: (-item.total_bytes, item.group, item.test_suite))
+    log.info("Found %d candidate groups with unused assets", len(aggregated))
+    return aggregated
+
+
+def format_text(candidates: Sequence[AggregatedCandidate]) -> str:
+    """Format candidate results as human-readable text."""
+    lines = [
+        "Candidate unused job assets",
+        f"NOTE: {CANDIDATE_NOTE}.",
+        "",
+    ]
+    if not candidates:
+        lines.append("No candidates found.")
+        return "\n".join(lines)
+
+    headers = ("Job Group", "Test Suite", "Jobs", "Candidate Settings", "Total Bytes")
+    rows = [
+        (
+            f"{c.group} ({c.group_id})"
+            if c.group_id is not None and not c.group.endswith(f"({c.group_id})")
+            else c.group,
+            c.test_suite,
+            str(c.job_count),
+            ", ".join(c.candidate_settings),
+            str(c.total_bytes),
+        )
+        for c in candidates
+    ]
+
+    col_widths = [max(len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(headers)]
+
+    row_format = "  ".join(f"{{:<{w}}}" for w in col_widths)
+    lines.extend([row_format.format(*headers), "  ".join("-" * w for w in col_widths)])
+
+    for c, row in zip(candidates, rows, strict=True):
+        lines.append(row_format.format(*row))
+        if c.reasons:
+            lines.append("  Reasons:")
+            lines.extend(f"    - {setting}: {c.reasons[setting]}" for setting in sorted(c.reasons))
+
+    return "\n".join(lines)
+
+
+def format_json(candidates: Sequence[AggregatedCandidate]) -> str:
+    """Format candidate results as JSON string."""
+    data = {
+        "candidates": [
+            {
+                "group": c.group,
+                "group_id": c.group_id,
+                "test_suite": c.test_suite,
+                "job_count": c.job_count,
+                "candidate_settings": c.candidate_settings,
+                "total_bytes": c.total_bytes,
+                "reasons": c.reasons,
+                "candidate": True,
+            }
+            for c in candidates
+        ],
+        "note": CANDIDATE_NOTE,
+    }
+    return json.dumps(data, indent=2)
+
+
+def fetch_asset_sizes(client: httpx.Client, host: str) -> dict[str, int]:
+    """Fetch all known asset sizes from /api/v1/assets."""
+    asset_sizes: dict[str, int] = {}
+    url = f"{host.rstrip('/')}/api/v1/assets"
+    offset = 0
+
+    log.info("Fetching asset sizes from %s", host)
+    while True:
+        log.debug("Fetching assets from %s: offset=%d, limit=%d", url, offset, PAGE_LIMIT)
+        try:
+            response = client.get(url, params={"limit": PAGE_LIMIT, "offset": offset})
+            response.raise_for_status()
+            data = response.json()
+        except (httpx.HTTPError, ValueError) as err:
+            log.warning("Could not fetch assets from %s: %s", url, err)
+            break
+
+        assets = data.get("assets", [])
+        for asset in assets:
+            name = asset.get("name")
+            size = asset.get("size")
+            if name and size is not None:
+                asset_sizes[str(name)] = int(size)
+
+        log.debug("Fetched %d assets (offset %d)", len(assets), offset)
+        if len(assets) < PAGE_LIMIT:
+            break
+        offset += len(assets)
+
+    log.info("Fetched %d asset sizes in total", len(asset_sizes))
+    return asset_sizes
+
+
+def fetch_jobs(
+    client: httpx.Client,
+    host: str,
+    group: int | None = None,
+    build: str | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch latest jobs matching optional group or build filters."""
+    jobs: list[dict[str, Any]] = []
+    url = f"{host.rstrip('/')}/api/v1/jobs"
+    params: dict[str, Any] = {"latest": 1}
+    if group is not None:
+        params["groupid"] = group
+    if build is not None:
+        params["build"] = build
+
+    log.info("Fetching latest jobs from %s (this can take a while for large job sets)", host)
+    log.debug("Job query filters: group=%s, build=%s", group, build)
+    offset = 0
+    while True:
+        page_params = {**params, "limit": PAGE_LIMIT, "offset": offset}
+        log.debug("Requesting jobs from %s with params %s", url, page_params)
+        response = client.get(url, params=page_params)
+        response.raise_for_status()
+        data = response.json()
+        batch = data.get("jobs", [])
+        jobs.extend(batch)
+        log.info("Fetched %d jobs (offset %d)", len(batch), offset)
+        if len(batch) < PAGE_LIMIT:
+            break
+        offset += len(batch)
+
+    log.info("Fetched %d jobs in total", len(jobs))
+    return jobs
+
+
+def main(args: list[str] | None = None) -> int:
+    """Run openqa-find-unused-job-assets CLI."""
+    parsed = parse_args(args)
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s", stream=sys.stderr)
+
+    with httpx.Client(timeout=parsed.timeout, headers={"User-Agent": USER_AGENT}) as client:
+        try:
+            asset_sizes = fetch_asset_sizes(client, parsed.host)
+            jobs = fetch_jobs(client, parsed.host, group=parsed.group, build=parsed.build)
+        except httpx.HTTPError as err:
+            log.exception("API request failed")
+            print(f"Error: API request failed: {err}", file=sys.stderr)
+            return 1
+
+    candidates = aggregate_candidates(jobs, asset_sizes)
+    log.debug("Formatting %d aggregated candidates as %s", len(candidates), parsed.format)
+    output = format_json(candidates) if parsed.format == "json" else format_text(candidates)
+    print(output)
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())
