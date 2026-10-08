@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-# ruff: file-ignore[blind-except, complex-structure, non-imperative-mood, line-too-long, boolean-type-hint-positional-argument, boolean-positional-value-in-call, too-many-return-statements, too-many-branches, too-many-arguments, too-many-locals, too-many-positional-arguments, magic-value-comparison, try-except-pass, suppressible-exception, uncapitalized-environment-variables, print, try-consider-else, manual-list-comprehension]
+# ruff: file-ignore[blind-except, complex-structure, non-imperative-mood, line-too-long, boolean-type-hint-positional-argument, boolean-default-value-positional-argument, too-many-return-statements, too-many-branches, too-many-arguments, too-many-locals, too-many-positional-arguments, magic-value-comparison, try-except-pass, suppressible-exception, uncapitalized-environment-variables, print, try-consider-else, manual-list-comprehension]
 """Takes an openQA job URL, looks for matching "known issues" and labels/restarts."""
 
 from __future__ import annotations
@@ -717,40 +717,53 @@ def investigate_issue(
 
 @app.command()
 def main(
-    job_url: str = typer.Argument(None, help="The openQA job URL"),
-    host: str = typer.Option(
-        "openqa.opensuse.org",
-        "--host",
-        "-H",
-        envvar="host",
-        help="openQA host to contact.",
-    ),
-    dry: bool = typer.Option(False, "--dry", "-n", help="conduct dry-run without any labelling or restarting"),
+    job_url: Annotated[str | None, typer.Argument(help="The openQA job URL")] = None,
+    host: Annotated[
+        str,
+        typer.Option(
+            "--host",
+            "-H",
+            envvar="host",
+            help="openQA host to contact.",
+        ),
+    ] = "openqa.opensuse.org",
+    dry: Annotated[
+        bool,
+        typer.Option("--dry", "-n", help="conduct dry-run without any labelling or restarting"),
+    ] = False,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity")] = 0,
-    retry_limit: int = typer.Option(
-        7,
-        "--retry-limit",
-        envvar="auto_review_retry_limit",
-        help="Default retry limit for the auto-review feature.",
-    ),
-    retries: int = typer.Option(
-        3,
-        "--retries",
-        envvar=["retries", "OPENQA_RETRIES"],
-        help="Number of retries for HTTP requests on failure.",
-    ),
-    http_timeout: float = typer.Option(
-        DEFAULT_HTTP_TIMEOUT,
-        "--http-timeout",
-        envvar=["OPENQA_HTTP_TIMEOUT_S", "HTTP_TIMEOUT"],
-        help="Timeout for HTTP requests in seconds.",
-    ),
-    redmine_timeout: float | None = typer.Option(
-        None,
-        "--redmine-timeout",
-        envvar="REDMINE_TIMEOUT",
-        help="Timeout for Redmine HTTP queries in seconds (defaults to --http-timeout).",
-    ),
+    retry_limit: Annotated[
+        int,
+        typer.Option(
+            "--retry-limit",
+            envvar="auto_review_retry_limit",
+            help="Default retry limit for the auto-review feature.",
+        ),
+    ] = 7,
+    retries: Annotated[
+        int,
+        typer.Option(
+            "--retries",
+            envvar=["retries", "OPENQA_RETRIES"],
+            help="Number of retries for HTTP requests on failure.",
+        ),
+    ] = 3,
+    http_timeout: Annotated[
+        float,
+        typer.Option(
+            "--http-timeout",
+            envvar=["OPENQA_HTTP_TIMEOUT_S", "HTTP_TIMEOUT"],
+            help="Timeout for HTTP requests in seconds.",
+        ),
+    ] = DEFAULT_HTTP_TIMEOUT,
+    redmine_timeout: Annotated[
+        float | None,
+        typer.Option(
+            "--redmine-timeout",
+            envvar="REDMINE_TIMEOUT",
+            help="Timeout for Redmine HTTP queries in seconds (defaults to --http-timeout).",
+        ),
+    ] = None,
 ) -> None:
     """Takes an openQA job URL, looks for matching "known issues", for example from progress.opensuse.org, labels the job and retriggers if specified in the issue (see the source code for details how to mark tickets)."""
     setup_logging(verbose)
