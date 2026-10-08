@@ -322,3 +322,28 @@ def test_reap_no_lock(mocker: MockerFixture) -> None:
 def test_reaper_config_ssh_options() -> None:
     config = reaper.ReaperConfig(ssh_timeout=20)
     assert config.ssh_options == "-o ConnectTimeout=20 -o BatchMode=yes"
+
+
+def test_reap_all_hosts_parallel(mocker: MockerFixture) -> None:
+    mock_handle = mocker.patch("reaper.handle_host")
+    config = reaper.ReaperConfig(dry_run=True)
+    reaper.reap_all_hosts(config, concurrency=3)
+    assert mock_handle.call_count == len(reaper.HYPERVISORS)
+    for host in reaper.HYPERVISORS:
+        mock_handle.assert_any_call(host, config)
+
+
+def test_reap_all_hosts_sequential(mocker: MockerFixture) -> None:
+    mock_handle = mocker.patch("reaper.handle_host")
+    config = reaper.ReaperConfig(dry_run=True)
+    reaper.reap_all_hosts(config, concurrency=1)
+    assert mock_handle.call_count == len(reaper.HYPERVISORS)
+    for host in reaper.HYPERVISORS:
+        mock_handle.assert_any_call(host, config)
+
+
+def test_reap_all_hosts_exception_propagates(mocker: MockerFixture) -> None:
+    mocker.patch("reaper.handle_host", side_effect=RuntimeError("connection error"))
+    config = reaper.ReaperConfig(dry_run=True)
+    with pytest.raises(RuntimeError, match="connection error"):
+        reaper.reap_all_hosts(config, concurrency=3)
