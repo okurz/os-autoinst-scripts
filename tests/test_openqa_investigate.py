@@ -479,7 +479,7 @@ def test_client_endpoints(mocker: MockerFixture) -> None:
     mock_http = mocker.patch.object(client, "_get_http", return_value={"data": 1})
 
     assert client.get_investigation_ajax(123) == {"data": 1}
-    mock_http.assert_called_with("tests/123/investigation_ajax", timeout=900.0)
+    mock_http.assert_called_with("tests/123/investigation_ajax?strict=0", timeout=900.0)
 
     assert client.get_investigation_ajax(123, strict=True) == {"data": 1}
     mock_http.assert_called_with("tests/123/investigation_ajax?strict=1", timeout=900.0)

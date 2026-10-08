@@ -273,9 +273,7 @@ class OpenQAClient:
 
     def get_investigation_ajax(self, job_id: int, *, strict: bool | None = None) -> dict[str, Any]:
         use_strict = self.strict if strict is None else strict
-        path = f"tests/{job_id}/investigation_ajax"
-        if use_strict:
-            path += "?strict=1"
+        path = f"tests/{job_id}/investigation_ajax?strict={'1' if use_strict else '0'}"
         return self._get_http(path, timeout=self.investigation_timeout)
 
     def get_vars_json(self, job_id: int) -> dict[str, Any]:
