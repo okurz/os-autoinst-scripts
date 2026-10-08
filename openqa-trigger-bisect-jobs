@@ -179,18 +179,18 @@ def openqa_set_job_prio(job_id, host, prio, dry_run):
 
 
 def openqa_clone(
-    cmds,
+    params,
     dry_run,
     default_opts=None,
-    default_cmds=None,
+    default_params=None,
 ):
     """Clone an openQA job."""
-    if default_cmds is None:
-        has_group = any(c.startswith(("_GROUP=", "_GROUP_ID=")) for c in cmds)
-        default_cmds = [] if has_group else ["_GROUP=0"]
+    if default_params is None:
+        has_group = any(c.startswith(("_GROUP=", "_GROUP_ID=")) for c in params)
+        default_params = [] if has_group else ["_GROUP=0"]
     if default_opts is None:
         default_opts = ["--skip-chained-deps", "--json-output", "--within-instance"]
-    return call(["openqa-clone-job", *default_opts, *cmds, *default_cmds], dry_run)
+    return call(["openqa-clone-job", *default_opts, *params, *default_params], dry_run)
 
 
 def fetch_url(url, request_type="text"):
