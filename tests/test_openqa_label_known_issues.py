@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, Mock, patch
 import httpx
 import pytest
 import typer
+from typer.testing import CliRunner
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
@@ -827,8 +828,10 @@ def test_main_configures_retry_transport(mocker: MockerFixture) -> None:
     mocker.patch("openqa_label_known_issues.investigate_issue")
     mock_client_class = mocker.patch("openqa_label_known_issues.httpx.Client")
 
+    runner = CliRunner()
     mocker.patch.dict("os.environ", {"retries": "4"}, clear=True)
-    openqa_label_known_issues.main("http://host/tests/123")
+    res = runner.invoke(openqa_label_known_issues.app, ["http://host/tests/123"])
+    assert res.exit_code == 0
 
     mock_client_class.assert_called_once()
     transport = mock_client_class.call_args[1]["transport"]
@@ -1012,3 +1015,98 @@ def test_retry_transport_before_sleep_non_transient() -> None:
     fake_state = MagicMock()
     fake_state.outcome.exception.return_value = ValueError("not transient")
     transport._before_sleep(fake_state)
+
+
+def test_retry_transport_retry_on_timeout(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
+    mock_sleep = mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("openqa_label_known_issues.httpx.HTTPTransport.handle_request")
+
+    resp200 = MagicMock(spec=httpx.Response)
+    resp200.status_code = 200
+
+    mock_super_handle.side_effect = [httpx.ReadTimeout("The read operation timed out"), resp200]
+
+    transport = openqa_label_known_issues.RetryTransport(retries=2)
+    req = httpx.Request("GET", "http://example.com")
+    with caplog.at_level(logging.INFO):
+        res = transport.handle_request(req)
+
+    assert res == resp200
+    assert mock_super_handle.call_count == 2
+    mock_sleep.assert_called_once_with(1.0)
+    assert "Request timed out (The read operation timed out). Retrying in 1.00 seconds (1 retries left)..." in caplog.text
+
+
+def test_retry_transport_exhausted_retries_on_timeout(mocker: MockerFixture) -> None:
+    mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("openqa_label_known_issues.httpx.HTTPTransport.handle_request")
+    mock_super_handle.side_effect = httpx.ReadTimeout("The read operation timed out")
+
+    transport = openqa_label_known_issues.RetryTransport(retries=2)
+    req = httpx.Request("GET", "http://example.com")
+
+    with pytest.raises(httpx.ReadTimeout):
+        transport.handle_request(req)
+
+    assert mock_super_handle.call_count == 3
+
+
+def test_main_configures_timeout(mocker: MockerFixture) -> None:
+    mock_fetch = mocker.patch("openqa_label_known_issues.fetch_issues", return_value=[])
+    mocker.patch("openqa_label_known_issues.investigate_issue")
+    mock_client_class = mocker.patch("openqa_label_known_issues.httpx.Client")
+
+    runner = CliRunner()
+    mocker.patch.dict("os.environ", {}, clear=True)
+    res = runner.invoke(openqa_label_known_issues.app, ["http://host/tests/123"])
+    assert res.exit_code == 0
+
+    mock_client_class.assert_called_once()
+    assert mock_client_class.call_args[1]["timeout"] == 90.0
+    assert mock_fetch.call_args[1]["timeout"] == 90.0
+
+
+def test_main_configures_custom_timeout_and_retries(mocker: MockerFixture) -> None:
+    mock_fetch = mocker.patch("openqa_label_known_issues.fetch_issues", return_value=[])
+    mocker.patch("openqa_label_known_issues.investigate_issue")
+    mock_client_class = mocker.patch("openqa_label_known_issues.httpx.Client")
+
+    openqa_label_known_issues.main(
+        "http://host/tests/123",
+        retries=5,
+        http_timeout=30.0,
+        redmine_timeout=15.0,
+    )
+
+    mock_client_class.assert_called_once()
+    transport = mock_client_class.call_args[1]["transport"]
+    assert transport.retries == 5
+    assert mock_client_class.call_args[1]["timeout"] == 30.0
+    assert mock_fetch.call_args[1]["timeout"] == 15.0
+
+
+def test_main_configures_timeout_from_env(mocker: MockerFixture) -> None:
+    mock_fetch = mocker.patch("openqa_label_known_issues.fetch_issues", return_value=[])
+    mocker.patch("openqa_label_known_issues.investigate_issue")
+    mock_client_class = mocker.patch("openqa_label_known_issues.httpx.Client")
+
+    runner = CliRunner()
+    mocker.patch.dict("os.environ", {"OPENQA_HTTP_TIMEOUT_S": "45.0", "REDMINE_TIMEOUT": "20.0"}, clear=True)
+    res = runner.invoke(openqa_label_known_issues.app, ["http://host/tests/123"])
+    assert res.exit_code == 0
+
+    mock_client_class.assert_called_once()
+    assert mock_client_class.call_args[1]["timeout"] == 45.0
+    assert mock_fetch.call_args[1]["timeout"] == 20.0
+
+
+def test_fetch_issues_with_timeout(mocker: MockerFixture) -> None:
+    mock_client = MagicMock(spec=httpx.Client)
+    mocker.patch.dict("os.environ", {}, clear=True)
+    mock_resp = Mock(status_code=200)
+    mock_resp.json.return_value = {"issues": []}
+    mock_client.get.return_value = mock_resp
+
+    openqa_label_known_issues.fetch_issues(mock_client, "http://query", timeout=25.0)
+
+    mock_client.get.assert_called_once_with("http://query", follow_redirects=True, timeout=25.0)

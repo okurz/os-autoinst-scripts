@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright SUSE LLC
-# ruff: file-ignore[blind-except, complex-structure, non-imperative-mood, line-too-long, boolean-type-hint-positional-argument, boolean-positional-value-in-call, too-many-return-statements, too-many-branches, too-many-arguments, too-many-locals, too-many-positional-arguments, magic-value-comparison, try-except-pass, suppressible-exception, uncapitalized-environment-variables, print, try-consider-else, manual-list-comprehension]
+# ruff: file-ignore[blind-except, complex-structure, non-imperative-mood, line-too-long, boolean-type-hint-positional-argument, boolean-default-value-positional-argument, too-many-return-statements, too-many-branches, too-many-arguments, too-many-locals, too-many-positional-arguments, magic-value-comparison, try-except-pass, suppressible-exception, uncapitalized-environment-variables, print, try-consider-else, manual-list-comprehension]
 """Takes an openQA job URL, looks for matching "known issues" and labels/restarts."""
 
 from __future__ import annotations
@@ -23,6 +23,8 @@ import httpx
 import tenacity
 import typer
 
+DEFAULT_HTTP_TIMEOUT: float = 90.0
+
 
 class TransientHTTPError(Exception):
     """Exception raised for HTTP responses with transient status codes."""
@@ -34,7 +36,7 @@ class TransientHTTPError(Exception):
 
 
 class RetryTransport(httpx.HTTPTransport):
-    """Custom HTTP transport that retries on transient errors (e.g. 429, 5xx)."""
+    """Custom HTTP transport that retries on transient errors (e.g. 429, 5xx) and timeouts."""
 
     RETRY_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 
@@ -53,25 +55,28 @@ class RetryTransport(httpx.HTTPTransport):
 
     def _wait_strategy(self, retry_state: tenacity.RetryCallState) -> float:
         exc = retry_state.outcome.exception()
-        if not isinstance(exc, TransientHTTPError):
-            return 0.0
-        response = exc.response
-        retry_after = response.headers.get("Retry-After")
-        delay = 0.0
-        if retry_after:
-            try:
-                delay = float(retry_after)
-            except ValueError:
+        if isinstance(exc, TransientHTTPError):
+            response = exc.response
+            retry_after = response.headers.get("Retry-After")
+            delay = 0.0
+            if retry_after:
                 try:
-                    dt = parsedate_to_datetime(retry_after)
-                    delay = (dt - self._now()).total_seconds()
-                except (TypeError, ValueError) as e:
-                    log.debug("Failed to parse Retry-After header as date: %s", e)
+                    delay = float(retry_after)
+                except ValueError:
+                    try:
+                        dt = parsedate_to_datetime(retry_after)
+                        delay = (dt - self._now()).total_seconds()
+                    except (TypeError, ValueError) as e:
+                        log.debug("Failed to parse Retry-After header as date: %s", e)
 
-        if delay <= 0.0:
-            delay = float(2 ** (retry_state.attempt_number - 1))
+            if delay <= 0.0:
+                delay = float(2 ** (retry_state.attempt_number - 1))
 
-        return delay
+            return delay
+        if isinstance(exc, httpx.TimeoutException):
+            return float(2 ** (retry_state.attempt_number - 1))
+
+        return 0.0
 
     def _before_sleep(self, retry_state: tenacity.RetryCallState) -> None:
         exc = retry_state.outcome.exception()
@@ -88,12 +93,22 @@ class RetryTransport(httpx.HTTPTransport):
                 delay,
                 retries_left,
             )
+        elif isinstance(exc, httpx.TimeoutException):
+            retries_left = self.retries - retry_state.attempt_number
+            delay = retry_state.next_action.sleep
+
+            log.info(
+                "Request timed out (%s). Retrying in %.2f seconds (%d retries left)...",
+                exc,
+                delay,
+                retries_left,
+            )
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
-        """Handle the HTTP request, retrying on transient status codes if retries are available."""
+        """Handle the HTTP request, retrying on transient status codes or timeouts if retries are available."""
         try:
             for attempt in tenacity.Retrying(
-                retry=tenacity.retry_if_exception_type(TransientHTTPError),
+                retry=tenacity.retry_if_exception_type((TransientHTTPError, httpx.TimeoutException)),
                 stop=tenacity.stop_after_attempt(self.retries + 1),
                 wait=self._wait_strategy,
                 before_sleep=self._before_sleep,
@@ -571,7 +586,11 @@ def handle_unreviewed(
             send_email(group_mailto, email_full, openqa_client.dry_run)
 
 
-def fetch_issues(client: httpx.Client, issue_query: str) -> list[dict[str, str]]:
+def fetch_issues(
+    client: httpx.Client,
+    issue_query: str,
+    timeout: float | None = None,
+) -> list[dict[str, str]]:
     if "issues" in os.environ:
         lines = [line.strip() for line in os.environ["issues"].split("\n") if line.strip()]
         issues_list = []
@@ -579,21 +598,26 @@ def fetch_issues(client: httpx.Client, issue_query: str) -> list[dict[str, str]]
             issues_list.append({"id": lines[i], "subject": lines[i + 1], "tracker_name": lines[i + 2]})
         return issues_list
 
+    kwargs: dict[str, Any] = {"follow_redirects": True}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+
     try:
-        response = client.get(issue_query, follow_redirects=True)
+        response = client.get(issue_query, **kwargs)
         response.raise_for_status()
         data = response.json()
-        issues_list = []
-        for issue in data.get("issues", []):
-            issues_list.append({
-                "id": str(issue.get("id")),
-                "subject": issue.get("subject", ""),
-                "tracker_name": issue.get("tracker", {}).get("name", ""),
-            })
-        return issues_list
     except Exception as e:
         print(f"Error fetching issues from Redmine: {e}", file=sys.stderr)
         return []
+
+    issues_list = []
+    for issue in data.get("issues", []):
+        issues_list.append({
+            "id": str(issue.get("id")),
+            "subject": issue.get("subject", ""),
+            "tracker_name": issue.get("tracker", {}).get("name", ""),
+        })
+    return issues_list
 
 
 def investigate_issue(
@@ -693,20 +717,53 @@ def investigate_issue(
 
 @app.command()
 def main(
-    job_url: str = typer.Argument(None, help="The openQA job URL"),
-    host: str = typer.Option(
-        os.environ.get("host", "openqa.opensuse.org"),
-        "--host",
-        "-H",
-        help="openQA host to contact.",
-    ),
-    dry: bool = typer.Option(False, "--dry", "-n", help="conduct dry-run without any labelling or restarting"),
+    job_url: Annotated[str | None, typer.Argument(help="The openQA job URL")] = None,
+    host: Annotated[
+        str,
+        typer.Option(
+            "--host",
+            "-H",
+            envvar="host",
+            help="openQA host to contact.",
+        ),
+    ] = "openqa.opensuse.org",
+    dry: Annotated[
+        bool,
+        typer.Option("--dry", "-n", help="conduct dry-run without any labelling or restarting"),
+    ] = False,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity")] = 0,
-    retry_limit: int = typer.Option(
-        int(os.environ.get("auto_review_retry_limit", "7")),
-        "--retry-limit",
-        help="Default retry limit for the auto-review feature.",
-    ),
+    retry_limit: Annotated[
+        int,
+        typer.Option(
+            "--retry-limit",
+            envvar="auto_review_retry_limit",
+            help="Default retry limit for the auto-review feature.",
+        ),
+    ] = 7,
+    retries: Annotated[
+        int,
+        typer.Option(
+            "--retries",
+            envvar=["retries", "OPENQA_RETRIES"],
+            help="Number of retries for HTTP requests on failure.",
+        ),
+    ] = 3,
+    http_timeout: Annotated[
+        float,
+        typer.Option(
+            "--http-timeout",
+            envvar=["OPENQA_HTTP_TIMEOUT_S", "HTTP_TIMEOUT"],
+            help="Timeout for HTTP requests in seconds.",
+        ),
+    ] = DEFAULT_HTTP_TIMEOUT,
+    redmine_timeout: Annotated[
+        float | None,
+        typer.Option(
+            "--redmine-timeout",
+            envvar="REDMINE_TIMEOUT",
+            help="Timeout for Redmine HTTP queries in seconds (defaults to --http-timeout).",
+        ),
+    ] = None,
 ) -> None:
     """Takes an openQA job URL, looks for matching "known issues", for example from progress.opensuse.org, labels the job and retriggers if specified in the issue (see the source code for details how to mark tickets)."""
     setup_logging(verbose)
@@ -714,7 +771,7 @@ def main(
         print("Need 'testurl'", file=sys.stderr)
         raise typer.Exit(1)
 
-    host_val = host
+    host_val = host or "openqa.opensuse.org"
     scheme_val = os.environ.get("scheme", "https")
     host_url_val = f"{scheme_val}://{host_val}"
 
@@ -722,8 +779,10 @@ def main(
     if dry_run_val:
         os.environ["dry_run"] = "1"
 
-    retries = os.environ.get("retries", "3")
-    openqa_client = OpenQAClient(host_url=host_url_val, dry_run=dry_run_val, retries=retries)
+    if redmine_timeout is None:
+        redmine_timeout = http_timeout
+
+    openqa_client = OpenQAClient(host_url=host_url_val, dry_run=dry_run_val, retries=str(retries))
 
     issue_marker = os.environ.get("issue_marker", "auto_review%3A")
     issue_query = os.environ.get(
@@ -731,10 +790,13 @@ def main(
         f"https://progress.opensuse.org/projects/openqav3/issues.json?limit=200&subproject_id=*&subject=~{issue_marker}",
     )
 
-    retries_count = int(retries) if retries.isdigit() else 3
-    transport = RetryTransport(retries=retries_count)
-    with httpx.Client(transport=transport, headers={"User-Agent": "openqa-label-known-issues"}) as client:
-        issues_list = fetch_issues(client, issue_query)
+    transport = RetryTransport(retries=retries)
+    with httpx.Client(
+        transport=transport,
+        headers={"User-Agent": "openqa-label-known-issues"},
+        timeout=http_timeout,
+    ) as client:
+        issues_list = fetch_issues(client, issue_query, timeout=redmine_timeout)
         investigate_issue(
             testurl=job_url,
             client=client,
