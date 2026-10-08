@@ -719,32 +719,34 @@ def investigate_issue(
 def main(
     job_url: str = typer.Argument(None, help="The openQA job URL"),
     host: str = typer.Option(
-        os.environ.get("host", "openqa.opensuse.org"),
+        "openqa.opensuse.org",
         "--host",
         "-H",
+        envvar="host",
         help="openQA host to contact.",
     ),
     dry: bool = typer.Option(False, "--dry", "-n", help="conduct dry-run without any labelling or restarting"),
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity")] = 0,
     retry_limit: int = typer.Option(
-        int(os.environ.get("auto_review_retry_limit", "7")),
+        7,
         "--retry-limit",
+        envvar="auto_review_retry_limit",
         help="Default retry limit for the auto-review feature.",
     ),
     retries: int = typer.Option(
-        int(os.environ.get("retries") or os.environ.get("OPENQA_RETRIES", "3")),
+        3,
         "--retries",
         envvar=["retries", "OPENQA_RETRIES"],
         help="Number of retries for HTTP requests on failure.",
     ),
     http_timeout: float = typer.Option(
-        float(os.environ.get("OPENQA_HTTP_TIMEOUT_S") or os.environ.get("HTTP_TIMEOUT", DEFAULT_HTTP_TIMEOUT)),
+        DEFAULT_HTTP_TIMEOUT,
         "--http-timeout",
         envvar=["OPENQA_HTTP_TIMEOUT_S", "HTTP_TIMEOUT"],
         help="Timeout for HTTP requests in seconds.",
     ),
     redmine_timeout: float | None = typer.Option(
-        float(os.environ["REDMINE_TIMEOUT"]) if "REDMINE_TIMEOUT" in os.environ else None,
+        None,
         "--redmine-timeout",
         envvar="REDMINE_TIMEOUT",
         help="Timeout for Redmine HTTP queries in seconds (defaults to --http-timeout).",
@@ -756,7 +758,7 @@ def main(
         print("Need 'testurl'", file=sys.stderr)
         raise typer.Exit(1)
 
-    host_val = host
+    host_val = host or "openqa.opensuse.org"
     scheme_val = os.environ.get("scheme", "https")
     host_url_val = f"{scheme_val}://{host_val}"
 

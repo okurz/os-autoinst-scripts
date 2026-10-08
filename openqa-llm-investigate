@@ -423,27 +423,38 @@ def investigate(
             help="Force another analysis even if an LLM comment already exists or if the job passed/softfailed",
         ),
     ] = False,
-    timeout: Annotated[int, typer.Option("--timeout", help="Timeout for LLM API requests in seconds")] = int(
-        os.environ.get("LLM_TIMEOUT", "600")
-    ),
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", envvar="LLM_TIMEOUT", help="Timeout for LLM API requests in seconds"),
+    ] = 600,
     retries: Annotated[
-        int, typer.Option("--retries", help="Number of retries on retry-worthy HTTP responses and timeouts")
-    ] = int(os.environ.get("LLM_RETRIES", "7")),
+        int,
+        typer.Option(
+            "--retries",
+            envvar="LLM_RETRIES",
+            help="Number of retries on retry-worthy HTTP responses and timeouts",
+        ),
+    ] = 7,
     llm_url: Annotated[
-        str, typer.Option("--llm-url", envvar="LLM_API_URL", help="URL for the LLM API endpoint")
-    ] = os.environ.get("LLM_API_URL", "http://localhost:8080/v1/chat/completions"),
+        str,
+        typer.Option("--llm-url", envvar="LLM_API_URL", help="URL for the LLM API endpoint"),
+    ] = "http://localhost:8080/v1/chat/completions",
     llm_model: Annotated[
-        str, typer.Option("--llm-model", envvar="LLM_MODEL", help="The LLM model to use")
-    ] = os.environ.get("LLM_MODEL", "gemma-4-26B-A4B-it"),
+        str,
+        typer.Option("--llm-model", envvar="LLM_MODEL", help="The LLM model to use"),
+    ] = "gemma-4-26B-A4B-it",
     llm_token: Annotated[
-        str | None, typer.Option("--llm-token", envvar="LLM_API_TOKEN", help="API token for authentication")
-    ] = os.environ.get("LLM_API_TOKEN"),
+        str | None,
+        typer.Option("--llm-token", envvar="LLM_API_TOKEN", help="API token for authentication"),
+    ] = None,
     log_lines: Annotated[
-        int, typer.Option("--log-lines", envvar="LLM_LOG_LINES", help="Number of log lines to fetch")
-    ] = int(os.environ.get("LLM_LOG_LINES", "200")),
+        int,
+        typer.Option("--log-lines", envvar="LLM_LOG_LINES", help="Number of log lines to fetch"),
+    ] = 200,
     history_limit: Annotated[
-        int, typer.Option("--history-limit", envvar="LLM_HISTORY_LIMIT", help="Limit for consecutive failure lookup")
-    ] = int(os.environ.get("LLM_HISTORY_LIMIT", "100")),
+        int,
+        typer.Option("--history-limit", envvar="LLM_HISTORY_LIMIT", help="Limit for consecutive failure lookup"),
+    ] = 100,
     build_failure_threshold: Annotated[
         int,
         typer.Option(
@@ -451,7 +462,7 @@ def investigate(
             envvar="LLM_BUILD_FAILURE_THRESHOLD",
             help="Threshold for infrastructure outage hint",
         ),
-    ] = int(os.environ.get("LLM_BUILD_FAILURE_THRESHOLD", "20")),
+    ] = 20,
     prompt_template_file: Annotated[
         str | None,
         typer.Option(
@@ -459,7 +470,7 @@ def investigate(
             envvar="LLM_PROMPT_TEMPLATE_FILE",
             help="File containing the prompt template to use",
         ),
-    ] = os.environ.get("LLM_PROMPT_TEMPLATE_FILE"),
+    ] = None,
     openqa_timeout: Annotated[
         float,
         typer.Option(
@@ -467,7 +478,7 @@ def investigate(
             envvar=["OPENQA_HTTP_TIMEOUT_S"],
             help="Timeout for openQA HTTP requests in seconds",
         ),
-    ] = float(os.environ.get("OPENQA_HTTP_TIMEOUT_S", str(DEFAULT_OPENQA_TIMEOUT))),
+    ] = DEFAULT_OPENQA_TIMEOUT,
     investigation_timeout: Annotated[
         float,
         typer.Option(
@@ -475,7 +486,7 @@ def investigate(
             envvar=["OPENQA_INVESTIGATION_TIMEOUT_S"],
             help="Timeout for investigation_ajax HTTP requests in seconds",
         ),
-    ] = float(os.environ.get("OPENQA_INVESTIGATION_TIMEOUT_S", str(DEFAULT_INVESTIGATION_TIMEOUT))),
+    ] = DEFAULT_INVESTIGATION_TIMEOUT,
 ) -> None:
     setup_logging(verbose, quiet)
     base_url, job_id = parse_job_url(job_url)
