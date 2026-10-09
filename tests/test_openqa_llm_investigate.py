@@ -8,12 +8,14 @@ import importlib.machinery
 import importlib.util
 import logging
 import pathlib
+import subprocess
 import sys
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, Mock
 
 import httpx
 import pytest
+import typer
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
@@ -541,3 +543,216 @@ def test_investigate_configures_timeouts(mocker: MockerFixture) -> None:
     assert mock_client_class.call_args[1]["timeout"] == pytest.approx(45.0)
     mock_perform.assert_called_once()
     assert mock_perform.call_args[1]["investigation_timeout"] == pytest.approx(60.0)
+
+
+def test_parse_job_url_with_scheme() -> None:
+    base_url, job_id = llm_investigate.parse_job_url("https://openqa.opensuse.org/tests/123")
+    assert base_url == "https://openqa.opensuse.org"
+    assert job_id == "123"
+
+
+def test_parse_job_url_without_scheme() -> None:
+    base_url, job_id = llm_investigate.parse_job_url("123")
+    assert base_url == "https://openqa.opensuse.org"
+    assert job_id == "123"
+
+
+def test_shares_failed_modules() -> None:
+    other_job = {"modules": [{"name": "isosize", "result": "failed"}, {"name": "x", "result": "passed"}]}
+    assert llm_investigate._shares_failed_modules(other_job, {"isosize"}) is True
+    assert llm_investigate._shares_failed_modules(other_job, {"other"}) is False
+
+
+def test_post_comment_failure(mocker: MockerFixture) -> None:
+    mock_run = mocker.patch("llm_investigate.subprocess.run")
+    mock_run.side_effect = subprocess.CalledProcessError(1, "openqa-cli", stderr="post error")
+    mock_log = mocker.patch("llm_investigate.log")
+    llm_investigate.post_comment("http://base", "123", "comment")
+    mock_log.error.assert_called_once_with("Failed to post comment: %s", "post error")
+
+
+def test_retry_transport_now() -> None:
+    assert llm_investigate.RetryTransport._now().tzinfo == datetime.UTC
+
+
+def test_retry_transport_retry_after_zero_seconds(mocker: MockerFixture) -> None:
+    mock_sleep = mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("llm_investigate.httpx.HTTPTransport.handle_request")
+
+    resp429 = MagicMock(spec=httpx.Response)
+    resp429.status_code = 429
+    resp429.headers = httpx.Headers({"Retry-After": "0"})
+
+    resp200 = MagicMock(spec=httpx.Response)
+    resp200.status_code = 200
+
+    mock_super_handle.side_effect = [resp429, resp200]
+
+    transport = llm_investigate.RetryTransport(retries=2)
+    res = transport.handle_request(httpx.Request("GET", "http://example.com"))
+
+    assert res == resp200
+    assert mock_super_handle.call_count == 2
+    mock_sleep.assert_called_once_with(1.0)
+    resp429.close.assert_called_once()
+
+
+def test_retry_transport_retry_after_past_date(mocker: MockerFixture) -> None:
+    mock_sleep = mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("llm_investigate.httpx.HTTPTransport.handle_request")
+
+    resp429 = MagicMock(spec=httpx.Response)
+    resp429.status_code = 429
+    resp429.headers = httpx.Headers({"Retry-After": "Wed, 21 Oct 2015 07:28:00 GMT"})
+
+    resp200 = MagicMock(spec=httpx.Response)
+    resp200.status_code = 200
+
+    mock_super_handle.side_effect = [resp429, resp200]
+
+    transport = llm_investigate.RetryTransport(retries=2)
+    res = transport.handle_request(httpx.Request("GET", "http://example.com"))
+
+    assert res == resp200
+    assert mock_super_handle.call_count == 2
+    mock_sleep.assert_called_once_with(1.0)
+    resp429.close.assert_called_once()
+
+
+def test_retry_transport_retry_after_invalid(mocker: MockerFixture) -> None:
+    mock_sleep = mocker.patch("time.sleep")
+    mock_log = mocker.patch("llm_investigate.log")
+    mock_super_handle = mocker.patch("llm_investigate.httpx.HTTPTransport.handle_request")
+
+    resp429 = MagicMock(spec=httpx.Response)
+    resp429.status_code = 429
+    resp429.headers = httpx.Headers({"Retry-After": "not-a-date"})
+
+    resp200 = MagicMock(spec=httpx.Response)
+    resp200.status_code = 200
+
+    mock_super_handle.side_effect = [resp429, resp200]
+
+    transport = llm_investigate.RetryTransport(retries=2)
+    res = transport.handle_request(httpx.Request("GET", "http://example.com"))
+
+    assert res == resp200
+    assert mock_super_handle.call_count == 2
+    mock_sleep.assert_called_once_with(1.0)
+    mock_log.debug.assert_called_once()
+    assert "Failed to parse Retry-After header as date" in mock_log.debug.call_args[0][0]
+    resp429.close.assert_called_once()
+
+
+def test_retry_transport_exhausted_retries(mocker: MockerFixture) -> None:
+    mocker.patch("time.sleep")
+    mock_super_handle = mocker.patch("llm_investigate.httpx.HTTPTransport.handle_request")
+
+    resp429 = MagicMock(spec=httpx.Response)
+    resp429.status_code = 429
+    resp429.headers = httpx.Headers({})
+
+    mock_super_handle.return_value = resp429
+
+    transport = llm_investigate.RetryTransport(retries=1)
+    res = transport.handle_request(httpx.Request("GET", "http://example.com"))
+
+    assert res == resp429
+    assert mock_super_handle.call_count == 2
+
+
+def test_retry_transport_before_sleep_non_transient() -> None:
+    transport = llm_investigate.RetryTransport()
+    fake_state = MagicMock()
+    fake_state.outcome.exception.return_value = ValueError("not transient")
+    transport._before_sleep(fake_state)
+
+
+def test_investigate_cmd_invalid_job_id(mocker: MockerFixture) -> None:
+    mock_log = mocker.patch("llm_investigate.log")
+    with pytest.raises(SystemExit) as exc:
+        llm_investigate.investigate("not-a-number")
+    assert exc.value.code == 1
+    mock_log.error.assert_called_once_with("Invalid job ID: %s", "not-a-number")
+
+
+def test_investigate_cmd_missing_job_data(mocker: MockerFixture) -> None:
+    mock_log = mocker.patch("llm_investigate.log")
+    setup_mock_client(mocker, overrides={"api/v1/jobs": {}})
+    with pytest.raises(SystemExit) as exc:
+        llm_investigate.investigate("123")
+    assert exc.value.code == 1
+    mock_log.error.assert_called_once()
+    assert "Could not retrieve job data" in mock_log.error.call_args[0][0]
+
+
+def test_investigate_cmd_same_module_failures(mocker: MockerFixture) -> None:
+    mock_post = mocker.patch("llm_investigate.post_comment")
+    mock_print = mocker.patch("builtins.print")
+    setup_mock_client(
+        mocker,
+        overrides={
+            "api/v1/jobs": {
+                "job": {
+                    "id": 123,
+                    "result": "failed",
+                    "test": "my_test",
+                    "testresults": [{"name": "isosize", "result": "failed"}],
+                    "settings": {"BUILD": "1.0", "DISTRI": "opensuse", "VERSION": "T", "ARCH": "x", "FLAVOR": "D"},
+                },
+                "jobs": [
+                    {
+                        "id": 124,
+                        "state": "done",
+                        "result": "failed",
+                        "modules": [{"name": "isosize", "result": "failed"}],
+                    },
+                    {
+                        "id": 123,
+                        "state": "done",
+                        "result": "failed",
+                        "modules": [{"name": "isosize", "result": "failed"}],
+                    },
+                ],
+            }
+        },
+    )
+    llm_investigate.investigate("123", build_failure_threshold=0)
+    mock_post.assert_called_once()
+    mock_print.assert_called_once_with("https://openqa.opensuse.org/tests/123")
+
+
+def test_investigate_cmd_prompt_template_file(mocker: MockerFixture, tmp_path: pathlib.Path) -> None:
+    mock_post = mocker.patch("llm_investigate.post_comment")
+    mocker.patch("builtins.print")
+    client = setup_mock_client(mocker)
+    template = tmp_path / "prompt"
+    template.write_text("custom prompt for {test_name}", encoding="utf-8")
+    llm_investigate.investigate("123", prompt_template_file=str(template))
+    mock_post.assert_called_once()
+    prompt = client.post.call_args[1]["json"]["messages"][0]["content"]
+    assert "custom prompt for my_test" in prompt
+
+
+def test_investigate_cmd_missing_prompt_template(mocker: MockerFixture, tmp_path: pathlib.Path) -> None:
+    mock_log = mocker.patch("llm_investigate.log")
+    setup_mock_client(mocker)
+    with pytest.raises(SystemExit) as exc:
+        llm_investigate.investigate("123", prompt_template_file=str(tmp_path / "missing"))
+    assert exc.value.code == 1
+    mock_log.error.assert_called_once()
+    assert "Could not read prompt template file" in mock_log.error.call_args[0][0]
+
+
+def test_main_entrypoint(mocker: MockerFixture) -> None:
+    mocker.patch.object(typer.Typer, "__call__")
+    script = f"{rootpath}/openqa-llm-investigate"
+    main_spec = importlib.util.spec_from_file_location(
+        "__main__",
+        script,
+        loader=importlib.machinery.SourceFileLoader("__main__", script),
+    )
+    assert main_spec
+    assert main_spec.loader
+    main_mod = importlib.util.module_from_spec(main_spec)
+    main_spec.loader.exec_module(main_mod)
