@@ -37,6 +37,7 @@ class RebootMethod(StrEnum):
     """Method used to reboot the hypervisor."""
 
     SYSRQ = "sysrq"
+    SYSRQ_REBOOT = "sysrq-reboot"
     REBOOT = "reboot"
 
 
@@ -200,23 +201,31 @@ def wait_for_host(host: str, config: ReaperConfig) -> bool:
     return False
 
 
+def reboot_command(host: str, config: ReaperConfig) -> tuple[str, str]:
+    """Return the reboot command for the configured method and the message announcing it."""
+    ssh = f"ssh -o ConnectTimeout={config.ssh_timeout} -o BatchMode=yes {host}"
+    if config.reboot_method == RebootMethod.SYSRQ:
+        # Echoing 'c' to sysrq-trigger panics the kernel, dumping core and rebooting
+        return (
+            f"{ssh} \"sudo bash -c 'echo c > /proc/sysrq-trigger'\"",
+            f"Triggering kernel crash dump (kdump) on {host}...",
+        )
+    if config.reboot_method == RebootMethod.SYSRQ_REBOOT:
+        # Echoing 'b' to sysrq-trigger reboots immediately without syncing or unmounting
+        return (
+            f"{ssh} \"sudo bash -c 'echo b > /proc/sysrq-trigger'\"",
+            f"Triggering immediate reboot via sysrq on {host}...",
+        )
+    return f'{ssh} "sudo reboot"', f"Triggering reboot on {host}..."
+
+
 def trigger_actions(
     host: str,
     jobs: list[int],
     config: ReaperConfig,
 ) -> None:
     """Trigger kdump (which reboots the machine) or standard reboot, and job re-triggering."""
-    if config.reboot_method == RebootMethod.SYSRQ:
-        # Echoing 'c' to sysrq-trigger panics the kernel, dumping core and rebooting
-        reboot_cmd = (
-            f"ssh -o ConnectTimeout={config.ssh_timeout} -o BatchMode=yes {host} "
-            "\"sudo bash -c 'echo c > /proc/sysrq-trigger'\""
-        )
-        action_msg = f"Triggering kernel crash dump (kdump) on {host}..."
-    else:
-        reboot_cmd = f'ssh -o ConnectTimeout={config.ssh_timeout} -o BatchMode=yes {host} "sudo reboot"'
-        action_msg = f"Triggering reboot on {host}..."
-
+    reboot_cmd, action_msg = reboot_command(host, config)
     print(action_msg)
     if config.dry_run:
         print(f"[DRY-RUN] Would execute: {reboot_cmd}")
@@ -359,7 +368,10 @@ def reap(  # ruff: ignore[too-many-arguments]
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose output")] = False,
     reboot_method: Annotated[
         RebootMethod,
-        typer.Option("--reboot-method", help="Reboot method to use ('sysrq' to induce crash or 'reboot' to reboot)"),
+        typer.Option(
+            "--reboot-method",
+            help="Reboot method: 'sysrq' (crash), 'sysrq-reboot' (immediate) or 'reboot'",
+        ),
     ] = RebootMethod.SYSRQ,
     max_wait_minutes: Annotated[
         int,

@@ -79,6 +79,29 @@ def test_get_running_jobs(mocker: MockerFixture) -> None:
             ),
         ),
         (
+            True,
+            [123],
+            "sysrq-reboot",
+            [
+                (
+                    "[DRY-RUN] Would execute: ssh -o ConnectTimeout=10 -o BatchMode=yes s390zl12.oqa.prg2.suse.org "
+                    "\"sudo bash -c 'echo b > /proc/sysrq-trigger'\""
+                ),
+                "[DRY-RUN] Would execute: openqa-cli api --osd -X POST jobs/123/restart",
+            ],
+            None,
+        ),
+        (
+            False,
+            [123],
+            "sysrq-reboot",
+            ["Triggering immediate reboot via sysrq on s390zl12.oqa.prg2.suse.org...", "Retriggering job 123..."],
+            (
+                "ssh -o ConnectTimeout=10 -o BatchMode=yes s390zl12.oqa.prg2.suse.org \"sudo bash -c 'echo b >"
+                " /proc/sysrq-trigger'\""
+            ),
+        ),
+        (
             False,
             [123],
             "reboot",
