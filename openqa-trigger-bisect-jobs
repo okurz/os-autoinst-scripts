@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 from functools import total_ordering
+from http import HTTPStatus
 from urllib.parse import urlparse, urlunparse
 
 import requests
@@ -155,12 +156,28 @@ client_args = [
 ]
 
 
+def _decode_output(output: bytes | None) -> str:
+    return output.decode("utf-8", errors="replace") if isinstance(output, bytes) else str(output)
+
+
+def _is_404_str(output_str: str) -> bool:
+    return "404" in output_str and "Not Found" in output_str
+
+
+def _is_404(output: bytes | None) -> bool:
+    return _is_404_str(_decode_output(output))
+
+
 def call(cmds, dry_run=False):
     """Call a command and return stdout."""
     log.debug("call: %s", cmds)
     res = subprocess.run((["echo", "Simulating: "] if dry_run else []) + cmds, capture_output=True, check=False)
     if len(res.stderr):
-        log.warning("call() %s stderr: %s", cmds[0], res.stderr)
+        stderr_str = _decode_output(res.stderr)
+        if res.returncode != 0 and _is_404(stderr_str):
+            log.debug("call() %s stderr (404 Not Found): %s", cmds[0], res.stderr)
+        else:
+            log.warning("call() %s stderr: %s", cmds[0], res.stderr)
     res.check_returncode()
     return res.stdout.decode("utf-8")
 
@@ -168,14 +185,26 @@ def call(cmds, dry_run=False):
 def openqa_comment(job, host, comment, dry_run):
     """Post a comment to an openQA job."""
     args = [*client_args, "--host", host, "-X", "POST", "jobs/" + str(job) + "/comments", "text=" + comment]
-    return call(args, dry_run)
+    try:
+        return call(args, dry_run)
+    except subprocess.CalledProcessError as e:
+        if _is_404(e.stderr):
+            log.info("Could not post comment as job %s has been deleted.", job)
+            return ""
+        raise
 
 
 def openqa_set_job_prio(job_id, host, prio, dry_run):
     """Set the priority of an openQA job."""
     prio_json = json.dumps({"priority": prio})
     args = [*client_args, "--host", host, "--json", "--data", prio_json, "-X", "PUT", "jobs/" + str(job_id)]
-    return call(args, dry_run)
+    try:
+        return call(args, dry_run)
+    except subprocess.CalledProcessError as e:
+        if _is_404(e.stderr):
+            log.info("Could not set priority as job %s has been deleted.", job_id)
+            return ""
+        raise
 
 
 def openqa_clone(
@@ -198,6 +227,11 @@ def fetch_url(url, request_type="text"):
     try:
         content = session.get(url, headers={"User-Agent": USER_AGENT})
         content.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == HTTPStatus.NOT_FOUND:
+            raise
+        log.exception("Error while fetching %s: %s", url, e)
+        raise
     except requests.exceptions.RequestException as e:
         log.exception("Error while fetching %s: %s", url, e)
         raise
@@ -300,10 +334,14 @@ def _trigger_bisect_job(args, base_url, job_id, test_name, line) -> str:
     try:
         out = openqa_clone(params, args.dry_run)
     except subprocess.SubprocessError as err:
-        if "the repositories for the below updates are unavailable" in str(err.stderr):
+        stderr_str = _decode_output(getattr(err, "stderr", ""))
+        if "the repositories for the below updates are unavailable" in stderr_str:
             extra_comment = "Not triggering any bisect jobs because: "
             openqa_comment(job_id, base_url, f"{extra_comment}{err.stderr}", args.dry_run)
             sys.exit(0)
+        if _is_404_str(stderr_str):
+            log.info("Skipping bisecting as job %s has been deleted.", job_id)
+            return ""
         raise
     return out
 
@@ -350,7 +388,13 @@ def main(args) -> None:
     job_id = parsed_url.path.lstrip("/tests/")
     test_url = f"{base_url}/api/v1/jobs/{job_id}"
     log.debug("Retrieving job data from %s", test_url)
-    test_data = fetch_url(test_url, request_type="json")
+    try:
+        test_data = fetch_url(test_url, request_type="json")
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == HTTPStatus.NOT_FOUND:
+            log.info("Skipping bisecting as job %s has been deleted.", job_id)
+            return
+        raise
     job = test_data["job"]
 
     if _check_skip_bisection(job) or _check_exclude_regex(job):
@@ -358,7 +402,13 @@ def main(args) -> None:
 
     investigation_url = f"{base_url}/tests/{job_id}/investigation_ajax"
     log.debug("Retrieving investigation info from %s", investigation_url)
-    investigation = fetch_url(investigation_url, request_type="json")
+    try:
+        investigation = fetch_url(investigation_url, request_type="json")
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == HTTPStatus.NOT_FOUND:
+            log.info("Skipping bisecting as job %s has been deleted.", job_id)
+            return
+        raise
     log.debug("Received investigation info: %s", investigation)
     if "diff_to_last_good" not in investigation:
         return

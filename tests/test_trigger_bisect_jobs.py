@@ -5,6 +5,7 @@
 import importlib.machinery
 import importlib.util
 import json
+import logging
 import pathlib
 import re
 import subprocess
@@ -56,6 +57,21 @@ def mocked_call(cmds: list[str], dry_run: bool = False) -> list[str]:
 
 
 orig_fetch_url = openqa.fetch_url
+orig_call = openqa.call
+orig_openqa_clone = openqa.openqa_clone
+orig_openqa_comment = openqa.openqa_comment
+orig_openqa_set_job_prio = openqa.openqa_set_job_prio
+
+
+@pytest.fixture(autouse=True)
+def _reset_openqa_globals() -> Any:
+    yield
+    openqa.fetch_url = orig_fetch_url
+    openqa.call = orig_call
+    openqa.openqa_clone = orig_openqa_clone
+    openqa.openqa_comment = orig_openqa_comment
+    openqa.openqa_set_job_prio = orig_openqa_set_job_prio
+
 
 cmds = [
     "https://openqa.opensuse.org/tests/7848818",
@@ -254,7 +270,7 @@ def test_triggers(investigation_gid: int, expected_suffix: list[str]) -> None:
     assert prio_calls == openqa.openqa_set_job_prio.call_args_list
 
 
-def test_problems() -> None:
+def test_problems(mocker: MockerFixture) -> None:
     args = args_factory()
     openqa.openqa_clone = MagicMock(return_value="")
     openqa.fetch_url = MagicMock(side_effect=mocked_fetch_url)
@@ -279,9 +295,9 @@ def test_problems() -> None:
     openqa.openqa_clone.assert_not_called()
 
     args.url = "http://openqa.opensuse.org/tests/101"
-    openqa.log.info = MagicMock()
+    mock_info = mocker.patch.object(openqa.log, "info")
     openqa.main(args)
-    openqa.log.info.assert_called_with("Job %d (%s) is passed, skipping bisection", 101, "foo")
+    mock_info.assert_called_with("Job %d (%s) is passed, skipping bisection", 101, "foo")
     assert (
         call(
             "http://openqa.opensuse.org/tests/101/investigation_ajax",
@@ -426,3 +442,82 @@ def test_fetch_url_success(mocker: MockerFixture) -> None:
 
     res_json = openqa.fetch_url("http://example.com/test", request_type="json")
     assert res_json == {"ok": True}
+
+
+def test_fetch_url_404_no_error_log(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 404
+    mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError(response=mock_resp)
+    mocker.patch.object(openqa.session, "get", return_value=mock_resp)
+
+    with caplog.at_level(logging.WARNING), pytest.raises(requests.exceptions.HTTPError):
+        openqa.fetch_url("http://example.com/test-404")
+    assert "Error while fetching" not in caplog.text
+
+
+def test_main_job_404_skips_bisection(caplog: pytest.LogCaptureFixture) -> None:
+    args = args_factory()
+    args.url = "https://openqa.opensuse.org/tests/7848818"
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 404
+    err = requests.exceptions.HTTPError(response=mock_resp)
+
+    openqa.fetch_url = MagicMock(side_effect=err)
+    openqa.log.setLevel(logging.INFO)
+    with caplog.at_level(logging.INFO, logger="openqa"):
+        openqa.main(args)
+
+    assert "Skipping bisecting as job 7848818 has been deleted." in caplog.text
+    assert caplog.records[0].levelname == "INFO"
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
+
+
+def test_main_investigation_404_skips_bisection(caplog: pytest.LogCaptureFixture) -> None:
+    args = args_factory()
+    args.url = "https://openqa.opensuse.org/tests/7848818"
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 404
+    err_404 = requests.exceptions.HTTPError(response=mock_resp)
+
+    def side_effect(url: str, request_type: str = "text") -> Any:
+        if "investigation_ajax" in url:
+            raise err_404
+        return mocked_fetch_url(url, request_type=request_type)
+
+    openqa.fetch_url = MagicMock(side_effect=side_effect)
+    openqa.log.setLevel(logging.INFO)
+    with caplog.at_level(logging.INFO, logger="openqa"):
+        openqa.main(args)
+
+    assert "Skipping bisecting as job 7848818 has been deleted." in caplog.text
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
+
+
+def test_comment_and_prio_404_handled_gracefully(caplog: pytest.LogCaptureFixture) -> None:
+    err_proc = subprocess.CompletedProcess(args=[], returncode=1, stderr=b"404 Not Found\n", stdout=b"")
+    openqa.call = orig_call
+    openqa.log.setLevel(logging.INFO)
+    with patch("subprocess.run", return_value=err_proc), caplog.at_level(logging.INFO, logger="openqa"):
+        openqa.openqa_comment(12345, "https://openqa.opensuse.org", "comment", dry_run=False)
+        openqa.openqa_set_job_prio(12345, "https://openqa.opensuse.org", 50, dry_run=False)
+
+    assert "Could not post comment as job 12345 has been deleted." in caplog.text
+    assert "Could not set priority as job 12345 has been deleted." in caplog.text
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
+
+
+def test_trigger_bisect_job_404_handled_gracefully(caplog: pytest.LogCaptureFixture) -> None:
+    args = args_factory()
+    args.url = "https://openqa.opensuse.org/tests/7848818"
+    err_proc = subprocess.CompletedProcess(args=[], returncode=1, stderr=b"404 Not Found\n", stdout=b"")
+    openqa.call = orig_call
+    openqa.openqa_clone = orig_openqa_clone
+    openqa.log.setLevel(logging.INFO)
+    with patch("subprocess.run", return_value=err_proc), caplog.at_level(logging.INFO, logger="openqa"):
+        res = openqa._trigger_bisect_job(args, "https://openqa.opensuse.org", "7848818", "test", {})
+
+    assert not res
+    assert "Skipping bisecting as job 7848818 has been deleted." in caplog.text
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
