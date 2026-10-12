@@ -146,6 +146,14 @@ def test_client_run_openqa_cli_variants(mocker: MockerFixture, caplog: pytest.Lo
         client._run_openqa_cli(["jobs/2"])
     assert "Error executing openqa-cli: CLI failure" in caplog.text
 
+    # CalledProcessError with 404 Not Found returns error_status without logging error
+    caplog.clear()
+    mock_run.side_effect = subprocess.CalledProcessError(1, ["cmd"], stderr="404 Not Found\n")
+    with caplog.at_level(logging.ERROR):
+        res_404 = client._run_openqa_cli(["jobs/2"])
+    assert res_404 == {"error_status": 404}
+    assert "Error executing openqa-cli" not in caplog.text
+
     # Empty stdout
     mock_run.side_effect = None
     mock_run.return_value = Mock(stdout="   ")
@@ -256,6 +264,15 @@ def test_client_get_http_variants(mocker: MockerFixture, caplog: pytest.LogCaptu
         client_retry._get_http("test/fail")
     assert "HTTP GET failed after 3 attempts" in caplog.text
     assert "Exception: Persistent error" in caplog.text
+
+    # HTTP 404 response returns error_status without logging error
+    caplog.clear()
+    resp_404 = httpx.Response(404, request=httpx.Request("GET", "https://openqa.opensuse.org/test/404"))
+    mock_client_inst.get.side_effect = httpx.HTTPStatusError("Not Found", request=resp_404.request, response=resp_404)
+    with caplog.at_level(logging.ERROR):
+        res_404 = client._get_http("test/404")
+    assert res_404 == {"error_status": 404}
+    assert "HTTP GET failed after" not in caplog.text
 
     # retries < 0 (covers line return {})
     client_empty = openqa_investigate.OpenQAClient("https://openqa.opensuse.org", retries=-1)
@@ -531,6 +548,14 @@ def test_clone_job_variants(mocker: MockerFixture, caplog: pytest.LogCaptureFixt
     with caplog.at_level(logging.ERROR), pytest.raises(subprocess.CalledProcessError):
         openqa_investigate.clone_job("https://openqa.opensuse.org", 1, [])
     assert "Error executing openqa-clone-job: Clone error" in caplog.text
+
+    # CalledProcessError with 404 Not Found returns error_status without logging error
+    caplog.clear()
+    mock_run.side_effect = subprocess.CalledProcessError(1, ["cmd"], stderr="404 Not Found\n")
+    with caplog.at_level(logging.ERROR):
+        res_404 = openqa_investigate.clone_job("https://openqa.opensuse.org", 1, [])
+    assert res_404 == {"error_status": 404}
+    assert "Error executing openqa-clone-job" not in caplog.text
 
     # Invalid JSON
     mock_run.side_effect = None
@@ -1174,6 +1199,15 @@ def test_post_investigate(mocker: MockerFixture, caplog: pytest.LogCaptureFixtur
     with pytest.raises(typer.Exit) as exc:
         openqa_investigate.post_investigate(client, 1, "test:investigate:retry", {})
     assert exc.value.exit_code == 2
+
+
+def test_run_investigation_logic_deleted_job(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
+    client = openqa_investigate.OpenQAClient("https://openqa.opensuse.org")
+    mocker.patch.object(client, "get_job", return_value={"error_status": 404})
+    with caplog.at_level(logging.INFO):
+        openqa_investigate.run_investigation_logic(client, 1)
+    assert "Skipping investigation as job 1 has been deleted." in caplog.text
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
 
 
 def test_run_investigation_logic(mocker: MockerFixture) -> None:

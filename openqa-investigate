@@ -29,6 +29,10 @@ TEST_NAME_INVALID_CHARS = re.compile(r"[^\w _*.,:/#@]")
 log = logging.getLogger("openqa-investigate")
 
 
+def _is_404_str(output_str: str) -> bool:
+    return "404" in output_str and "Not Found" in output_str
+
+
 def setup_logging(verbose: int) -> None:
     level_map = {
         0: logging.WARNING,
@@ -172,6 +176,9 @@ class OpenQAClient:
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, check=True)
         except subprocess.CalledProcessError as e:
+            if _is_404_str(e.stderr):
+                log.debug("openqa-cli returned 404 Not Found: %s", e.stderr.strip())
+                return {"error_status": HTTP_NOT_FOUND}
             log.exception("Error executing openqa-cli: %s", e.stderr)
             raise
 
@@ -210,6 +217,12 @@ class OpenQAClient:
                 if isinstance(res_json, dict):
                     return res_json
                 return {"data": res_json}
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == HTTP_NOT_FOUND:
+                log.debug("HTTP GET returned 404 Not Found for %s", url)
+                return {"error_status": HTTP_NOT_FOUND}
+            log.exception("HTTP GET failed after %d attempts", self.retries + 1)
+            raise
         except Exception:
             log.exception("HTTP GET failed after %d attempts", self.retries + 1)
             raise
@@ -311,6 +324,9 @@ def clone_job(
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
+        if _is_404_str(e.stderr):
+            log.debug("openqa-clone-job returned 404 Not Found: %s", e.stderr.strip())
+            return {"error_status": HTTP_NOT_FOUND}
         log.exception("Error executing openqa-clone-job: %s", e.stderr)
         raise
 
@@ -949,7 +965,7 @@ def post_investigate(
         raise typer.Exit(code=2)
 
 
-def run_investigation_logic(  # ruff: ignore[too-many-arguments, complex-structure]
+def run_investigation_logic(  # ruff: ignore[too-many-arguments, complex-structure, too-many-branches]
     client: OpenQAClient,
     job_id: int,
     *,
@@ -967,6 +983,9 @@ def run_investigation_logic(  # ruff: ignore[too-many-arguments, complex-structu
         client.strict = strict
 
     job_data = client.get_job(job_id)
+    if job_data.get("error_status") == HTTP_NOT_FOUND:
+        log.info("Skipping investigation as job %s has been deleted.", job_id)
+        return
     if not job_data or "job" not in job_data:
         log.error("Error: unable to query job data for %s", job_id)
         raise typer.Exit(code=1)
