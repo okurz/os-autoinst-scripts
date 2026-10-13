@@ -27,6 +27,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from common.error_handling import decode_output, is_404, is_404_str
+
 USER_AGENT = "openqa-trigger-bisect-jobs (https://github.com/os-autoinst/os-autoinst-scripts)"
 
 logging.basicConfig()
@@ -156,25 +158,13 @@ client_args = [
 ]
 
 
-def _decode_output(output: bytes | None) -> str:
-    return output.decode("utf-8", errors="replace") if isinstance(output, bytes) else str(output)
-
-
-def _is_404_str(output_str: str) -> bool:
-    return "404" in output_str and "Not Found" in output_str
-
-
-def _is_404(output: bytes | None) -> bool:
-    return _is_404_str(_decode_output(output))
-
-
 def call(cmds, dry_run=False):
     """Call a command and return stdout."""
     log.debug("call: %s", cmds)
     res = subprocess.run((["echo", "Simulating: "] if dry_run else []) + cmds, capture_output=True, check=False)
     if len(res.stderr):
-        stderr_str = _decode_output(res.stderr)
-        if res.returncode != 0 and _is_404(stderr_str):
+        stderr_str = decode_output(res.stderr)
+        if res.returncode != 0 and is_404(stderr_str):
             log.debug("call() %s stderr (404 Not Found): %s", cmds[0], res.stderr)
         else:
             log.warning("call() %s stderr: %s", cmds[0], res.stderr)
@@ -188,7 +178,7 @@ def openqa_comment(job, host, comment, dry_run):
     try:
         return call(args, dry_run)
     except subprocess.CalledProcessError as e:
-        if _is_404(e.stderr):
+        if is_404(e.stderr):
             log.info("Could not post comment as job %s has been deleted.", job)
             return ""
         raise
@@ -201,7 +191,7 @@ def openqa_set_job_prio(job_id, host, prio, dry_run):
     try:
         return call(args, dry_run)
     except subprocess.CalledProcessError as e:
-        if _is_404(e.stderr):
+        if is_404(e.stderr):
             log.info("Could not set priority as job %s has been deleted.", job_id)
             return ""
         raise
@@ -334,12 +324,12 @@ def _trigger_bisect_job(args, base_url, job_id, test_name, line) -> str:
     try:
         out = openqa_clone(params, args.dry_run)
     except subprocess.SubprocessError as err:
-        stderr_str = _decode_output(getattr(err, "stderr", ""))
+        stderr_str = decode_output(getattr(err, "stderr", ""))
         if "the repositories for the below updates are unavailable" in stderr_str:
             extra_comment = "Not triggering any bisect jobs because: "
             openqa_comment(job_id, base_url, f"{extra_comment}{err.stderr}", args.dry_run)
             sys.exit(0)
-        if _is_404_str(stderr_str):
+        if is_404_str(stderr_str):
             log.info("Skipping bisecting as job %s has been deleted.", job_id)
             return ""
         raise

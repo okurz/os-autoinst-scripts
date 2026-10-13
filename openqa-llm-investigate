@@ -22,15 +22,13 @@ import httpx
 import tenacity
 import typer
 
+from common.error_handling import is_404_str
+
 USER_AGENT = "openqa-llm-investigate (https://github.com/os-autoinst/os-autoinst-scripts)"
 DEFAULT_OPENQA_TIMEOUT: float = 90.0
 DEFAULT_INVESTIGATION_TIMEOUT: float = 900.0
 
 log = logging.getLogger(__name__)
-
-
-def _is_404_str(output_str: str) -> bool:
-    return "404" in output_str and "Not Found" in output_str
 
 
 class TransientHTTPError(Exception):
@@ -189,7 +187,7 @@ def post_comment(base_url: str, job_id: str, comment: str) -> None:
         res = subprocess.run(cmd, check=True, capture_output=True, text=True)
         log.debug("Posted comment to %s/t%s: %s", base_url, job_id, res.stdout)
     except subprocess.CalledProcessError as e:
-        if _is_404_str(e.stderr):
+        if is_404_str(e.stderr):
             log.info("Could not post comment as job %s has been deleted.", job_id)
             return
         log.exception("Failed to post comment: %s", e.stderr)
