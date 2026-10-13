@@ -264,7 +264,21 @@ def _call_llm_api(  # ruff: ignore[too-many-arguments, too-many-positional-argum
         sys.exit(1)
 
 
-def _perform_investigation(  # ruff: ignore[too-many-arguments, too-many-branches, too-many-locals, too-many-statements, complex-structure]
+def _fetch_job_details(client: httpx.Client, base_url: str, job_id: str) -> dict[str, Any]:
+    job_data = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}/details")
+    if not job_data or "job" not in job_data:
+        # Fallback for openQA versions/configurations where /details might fail
+        job_data = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}")
+    if job_data.get("error_status") == HTTPStatus.NOT_FOUND:
+        log.info("Skipping investigation as job %s has been deleted.", job_id)
+        sys.exit(0)
+    if not job_data or "job" not in job_data:
+        log.error("Could not retrieve job data for job %s from %s", job_id, base_url)
+        sys.exit(1)
+    return job_data["job"]
+
+
+def _perform_investigation(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-statements, complex-structure]
     client: httpx.Client,
     base_url: str,
     job_id: str,
@@ -292,18 +306,7 @@ def _perform_investigation(  # ruff: ignore[too-many-arguments, too-many-branche
         log.info("Job %s already has an LLM investigation summary, skipping.", job_id)
         sys.exit(0)
 
-    # Fetch job details
-    job_data = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}/details")
-    if not job_data or "job" not in job_data:
-        # Fallback for openQA versions/configurations where /details might fail
-        job_data = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}")
-    if job_data.get("error_status") == HTTPStatus.NOT_FOUND:
-        log.info("Skipping investigation as job %s has been deleted.", job_id)
-        sys.exit(0)
-    if not job_data or "job" not in job_data:
-        log.error("Could not retrieve job data for job %s from %s", job_id, base_url)
-        sys.exit(1)
-    job = job_data["job"]
+    job = _fetch_job_details(client, base_url, job_id)
 
     if not force and job.get("result") in {"passed", "softfailed"}:
         log.info("Job %s %s, skipping investigation.", job_id, job.get("result"))
