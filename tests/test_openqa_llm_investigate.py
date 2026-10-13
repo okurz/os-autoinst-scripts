@@ -8,6 +8,7 @@ import importlib.machinery
 import importlib.util
 import logging
 import pathlib
+import subprocess
 import sys
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, Mock
@@ -61,6 +62,19 @@ def test_fetch_json_failure() -> None:
     assert res == []
 
 
+def test_fetch_json_404(caplog: pytest.LogCaptureFixture) -> None:
+    mock_client = MagicMock(spec=httpx.Client)
+    resp_404 = httpx.Response(404, request=httpx.Request("GET", "http://example.com/api/v1/jobs/123"))
+    mock_client.get.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "Not Found", request=resp_404.request, response=resp_404
+    )
+
+    with caplog.at_level(logging.WARNING):
+        res = llm_investigate.fetch_json(mock_client, "http://example.com/api/v1/jobs/123")
+    assert res == {"error_status": 404}
+    assert "Failed to fetch JSON" not in caplog.text
+
+
 def test_fetch_text_success() -> None:
     mock_client = MagicMock(spec=httpx.Client)
     mock_response = MagicMock()
@@ -88,6 +102,17 @@ def test_fetch_text_failure() -> None:
     assert not res
 
 
+def test_fetch_text_404(caplog: pytest.LogCaptureFixture) -> None:
+    mock_client = MagicMock(spec=httpx.Client)
+    resp_404 = httpx.Response(404, request=httpx.Request("GET", "http://example.com/test.txt"))
+    mock_client.stream.side_effect = httpx.HTTPStatusError("Not Found", request=resp_404.request, response=resp_404)
+
+    with caplog.at_level(logging.WARNING):
+        res = llm_investigate.fetch_text(mock_client, "http://example.com/test.txt")
+    assert not res
+    assert "Failed to fetch text" not in caplog.text
+
+
 def test_post_comment(mocker: MockerFixture) -> None:
     mock_run = mocker.patch("llm_investigate.subprocess.run")
     llm_investigate.post_comment("http://base", "123", "test comment")
@@ -96,6 +121,45 @@ def test_post_comment(mocker: MockerFixture) -> None:
     assert "openqa-cli" in args
     assert "jobs/123/comments" in args
     assert "text=test comment" in args
+
+
+def test_post_comment_404(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
+    err = subprocess.CalledProcessError(1, ["openqa-cli"], stderr="404 Not Found\n")
+    mocker.patch("llm_investigate.subprocess.run", side_effect=err)
+    with caplog.at_level(logging.INFO):
+        llm_investigate.post_comment("http://base", "123", "test comment")
+    assert "Could not post comment as job 123 has been deleted." in caplog.text
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
+
+
+def test_perform_investigation_deleted_job(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
+    mock_client = MagicMock()
+
+    def mock_fetch(_client: Any, url: str, *_args: Any, **_kwargs: Any) -> Any:
+        if "comments" in url:
+            return []
+        return {"error_status": 404}
+
+    mocker.patch.object(llm_investigate, "fetch_json", side_effect=mock_fetch)
+    with caplog.at_level(logging.INFO), pytest.raises(SystemExit) as exc:
+        llm_investigate._perform_investigation(
+            mock_client,
+            "http://base",
+            "123",
+            force=False,
+            dry=False,
+            llm_url="http://llm",
+            llm_model="test-model",
+            timeout=60,
+            llm_token=None,
+            log_lines=10,
+            history_limit=10,
+            build_failure_threshold=10,
+            prompt_template_file=None,
+        )
+    assert exc.value.code == 0
+    assert "Skipping investigation as job 123 has been deleted." in caplog.text
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
 
 
 def setup_mock_client(mocker: MockerFixture, overrides: dict[str, Any] | None = None) -> MagicMock:

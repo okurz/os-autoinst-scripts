@@ -14,6 +14,7 @@ import subprocess
 import sys
 from collections import deque
 from email.utils import parsedate_to_datetime
+from http import HTTPStatus
 from typing import Annotated, Any
 from urllib.parse import urlparse, urlunparse
 
@@ -26,6 +27,10 @@ DEFAULT_OPENQA_TIMEOUT: float = 90.0
 DEFAULT_INVESTIGATION_TIMEOUT: float = 900.0
 
 log = logging.getLogger(__name__)
+
+
+def _is_404_str(output_str: str) -> bool:
+    return "404" in output_str and "Not Found" in output_str
 
 
 class TransientHTTPError(Exception):
@@ -137,6 +142,9 @@ def fetch_json(
         response.raise_for_status()
         return response.json()
     except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as e:
+        if e.response.status_code == HTTPStatus.NOT_FOUND:
+            log.debug("JSON endpoint %s returned 404 Not Found", url)
+            return default if default is not None else {"error_status": HTTPStatus.NOT_FOUND}
         log.warning("Failed to fetch JSON from %s with params %s: %s", url, params, e)
         return default if default is not None else {}
 
@@ -153,7 +161,12 @@ def fetch_text(client: httpx.Client, url: str, max_lines: int = 200, timeout: fl
             for line in response.iter_lines():
                 lines.append(line)
         return "\n".join(lines)
-    except (httpx.RequestError, httpx.HTTPStatusError) as e:
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == HTTPStatus.NOT_FOUND:
+            log.debug("Text endpoint %s returned 404 Not Found", url)
+            return ""
+        log.warning("Failed to fetch text from %s: %s", url, e)
+    except httpx.RequestError as e:
         log.warning("Failed to fetch text from %s: %s", url, e)
         return ""
 
@@ -176,6 +189,9 @@ def post_comment(base_url: str, job_id: str, comment: str) -> None:
         res = subprocess.run(cmd, check=True, capture_output=True, text=True)
         log.debug("Posted comment to %s/t%s: %s", base_url, job_id, res.stdout)
     except subprocess.CalledProcessError as e:
+        if _is_404_str(e.stderr):
+            log.info("Could not post comment as job %s has been deleted.", job_id)
+            return
         log.exception("Failed to post comment: %s", e.stderr)
 
 
@@ -248,7 +264,7 @@ def _call_llm_api(  # ruff: ignore[too-many-arguments, too-many-positional-argum
         sys.exit(1)
 
 
-def _perform_investigation(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-statements, complex-structure]
+def _perform_investigation(  # ruff: ignore[too-many-arguments, too-many-branches, too-many-locals, too-many-statements, complex-structure]
     client: httpx.Client,
     base_url: str,
     job_id: str,
@@ -268,7 +284,11 @@ def _perform_investigation(  # ruff: ignore[too-many-arguments, too-many-locals,
     """Perform the LLM investigation."""
     # Check for existing LLM investigation comments
     comments = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}/comments", default=[])
-    if not force and any(c.get("text", "").startswith("**LLM Investigation summary:**") for c in comments):
+    if (
+        not force
+        and isinstance(comments, list)
+        and any(c.get("text", "").startswith("**LLM Investigation summary:**") for c in comments)
+    ):
         log.info("Job %s already has an LLM investigation summary, skipping.", job_id)
         sys.exit(0)
 
@@ -277,6 +297,9 @@ def _perform_investigation(  # ruff: ignore[too-many-arguments, too-many-locals,
     if not job_data or "job" not in job_data:
         # Fallback for openQA versions/configurations where /details might fail
         job_data = fetch_json(client, f"{base_url}/api/v1/jobs/{job_id}")
+    if job_data.get("error_status") == HTTPStatus.NOT_FOUND:
+        log.info("Skipping investigation as job %s has been deleted.", job_id)
+        sys.exit(0)
     if not job_data or "job" not in job_data:
         log.error("Could not retrieve job data for job %s from %s", job_id, base_url)
         sys.exit(1)
