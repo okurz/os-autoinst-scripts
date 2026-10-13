@@ -5,3 +5,4 @@
 /htmlcov/
 .*.swp
 /uv.lock
+/.coverage
