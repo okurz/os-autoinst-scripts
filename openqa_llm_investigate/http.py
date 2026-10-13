@@ -75,7 +75,7 @@ class OpenQA:
         level = (
             logging.DEBUG
             if isinstance(error, httpx.HTTPStatusError) and error.response.status_code == HTTPStatus.NOT_FOUND
-            else logging.WARNING
+            else logging.INFO
         )
         log.log(level, "Optional fetch failed: %s", redact(f"{self.server}{path}: {error}"))
 
