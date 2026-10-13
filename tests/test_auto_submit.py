@@ -262,6 +262,7 @@ def test_fetch_lfs_objects_real_git_repo(tmp_path: pathlib.Path, monkeypatch: py
     subprocess.run([git_bin, "init", "-b", "leap-16.0", str(parent_dir)], check=True)
     subprocess.run([git_bin, "-C", str(parent_dir), "config", "user.name", "Test User"], check=True)
     subprocess.run([git_bin, "-C", str(parent_dir), "config", "user.email", "test@example.com"], check=True)
+    subprocess.run([git_bin, "-C", str(parent_dir), "config", "commit.gpgsign", "false"], check=True)
     subprocess.run([git_bin, "-C", str(parent_dir), "lfs", "install", "--local"], check=True)
     subprocess.run([git_bin, "-C", str(parent_dir), "lfs", "track", "*.obscpio"], check=True)
     (parent_dir / "base.txt").write_text("base content\n", encoding="utf-8")
