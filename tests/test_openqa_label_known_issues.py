@@ -1034,7 +1034,9 @@ def test_retry_transport_retry_on_timeout(mocker: MockerFixture, caplog: pytest.
     assert res == resp200
     assert mock_super_handle.call_count == 2
     mock_sleep.assert_called_once_with(1.0)
-    assert "Request timed out (The read operation timed out). Retrying in 1.00 seconds (1 retries left)..." in caplog.text
+    assert (
+        "Request timed out (The read operation timed out). Retrying in 1.00 seconds (1 retries left)..." in caplog.text
+    )
 
 
 def test_retry_transport_exhausted_retries_on_timeout(mocker: MockerFixture) -> None:
