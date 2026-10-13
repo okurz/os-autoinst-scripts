@@ -1,6 +1,6 @@
 SH_FILES ?= $(shell file --mime-type $$(git ls-files) test/*.t | sed -n 's/^\(.*\):.*text\/x-shellscript.*$$/\1/p')
 SH_SHELLCHECK_FILES ?= $(shell file --mime-type * | sed -n 's/^\(.*\):.*text\/x-shellscript.*$$/\1/p')
-PY_FILES ?= $(shell set -o pipefail; file --mime-type $$(git ls-files) | grep -E 'text/x-script\.python|text/x-python' | cut -d: -f1)
+PY_FILES ?= $(shell set -o pipefail; file --mime-type $$(git ls-files) | grep -E '.py:|text/x-script\.python|text/x-python' | cut -d: -f1)
 COV_MODULES ?= $(shell grep -hoE 'SourceFileLoader.".[a-z0-9][a-z_0-9]*' tests/*.py | cut -d'"' -f2 | sort -u)
 RUNNER ?= uv run
 
