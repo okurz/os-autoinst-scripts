@@ -6,3 +6,4 @@
 .*.swp
 /uv.lock
 /.coverage
+__pycache__/

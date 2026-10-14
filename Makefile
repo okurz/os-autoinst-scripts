@@ -94,8 +94,8 @@ check-code-health: ## Run code health checks (vulture)
 	@$(RUNNER) vulture $$(git ls-files "**.py") --min-confidence 80
 
 .PHONY: test-with-coverage
-test-with-coverage: ## Run python tests with coverage of the loaded root scripts
-	$(RUNNER) pytest $(foreach m,$(COV_MODULES),--cov=$(m)) --cov-report=term-missing tests/
+test-with-coverage: ## Run python tests with coverage of the loaded root scripts and the llm-investigate package
+	$(RUNNER) pytest $(foreach m,$(COV_MODULES) openqa_llm_investigate,--cov=$(m)) --cov-report=term-missing tests/
 
 .PHONY: install-python-deps
 install-python-deps:
