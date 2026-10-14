@@ -278,7 +278,7 @@ def diff_has_single_added_block(diff_cmd: list[str]) -> tuple[bool, str]:
         if line.startswith(("+++", "---")):
             continue
         if line.startswith("-"):
-            return (False, res.stdout)
+            return (False, None)
         if line.startswith("+"):
             if not in_added_block:
                 in_added_block = True
@@ -450,9 +450,9 @@ class AutoSubmitter:
             self._fetch_lfs_objects(branch)
             self._copy_files_to_clone(package)
 
-            (diff_ok, output) = diff_has_single_added_block(diff_cmd)
+            (diff_ok, res) = diff_has_single_added_block(diff_cmd)
             if not diff_ok:
-                log.warning("git diff for %s.changes does not look ok:\n%s", package, output)
+                log.warning("git diff for %s.changes does not look ok:\n%s", package, res.stdout)
                 return False
 
         return True
@@ -914,9 +914,9 @@ class AutoSubmitter:
             os.chdir(dst_dir)
 
             diff_cmd = [*shlex.split(self.osc_cmd_str), "diff", f"{package}.changes"]
-            (diff_ok, output) = diff_has_single_added_block(diff_cmd)
+            (diff_ok, res) = diff_has_single_added_block(diff_cmd)
             if not diff_ok:
-                log.warning("osc diff for %s.changes does not look ok:\n%s", package, output)
+                log.warning("osc diff for %s.changes does not look ok:\n%s", package, res.stdout)
                 return False
 
         return self.update_package(package=package)

@@ -179,7 +179,7 @@ def test_prepare_local_clone_diff_not_ok(mocker: MockerFixture, caplog: pytest.L
     submitter = auto_submit.AutoSubmitter(dst_project="dst", git_cmd_str="git", dir=pathlib.Path(), dry_run=False)
     mocker.patch(
         "auto_submit.diff_has_single_added_block",
-        return_value=(False, "diff output"),
+        return_value=(False, subprocess.CompletedProcess("", 0, stdout="diff output", stderr="")),
     )
     res = submitter._prepare_local_clone("pkg", "leap-16.0")
     assert res is False
@@ -705,7 +705,7 @@ def test_handle_auto_submit_diff_not_ok(
     mocker.patch("auto_submit.AutoSubmitter.update_package", return_value=True)
     mocker.patch(
         "auto_submit.diff_has_single_added_block",
-        return_value=(False, "diff output"),
+        return_value=(False, subprocess.CompletedProcess("", 0, stdout="diff output", stderr="")),
     )
 
     monkeypatch.chdir(tmp_path)
@@ -822,4 +822,4 @@ Index: os-autoinst.changes
     mock_run.return_value = subprocess.CompletedProcess(["dummy"], 0, stdout=diff)
     (diff_ok, res) = auto_submit.diff_has_single_added_block(["dummy"])
     assert diff_ok is False
-    assert res == diff
+    assert res is None
