@@ -298,7 +298,6 @@ def parse_job_url(job_url: str) -> tuple[str, str]:
 
 def _shares_failed_modules(other_job: dict[str, Any], target_modules: set[str]) -> bool:
     """Check if the given job has failures in any of the target modules."""
-    """Check if the given job has failures in any of the target modules."""
     other_failed = (m.get("name") for m in other_job.get("modules", []) if m.get("result") == "failed")
     return bool(target_modules.intersection(other_failed))
 
