@@ -285,6 +285,22 @@ def test_investigate_cmd_dry_run(mocker: MockerFixture) -> None:
     mock_print.assert_any_call("**LLM Investigation summary:**\n\n" + "\n\n".join(["BISECT: NO. Already known."] * 3))
 
 
+def test_investigate_cmd_print_prompt(mocker: MockerFixture) -> None:
+    mock_post = mocker.patch("llm_investigate.post_comment")
+    mock_print = mocker.patch("llm_investigate.typer.echo")
+    client = setup_mock_client(
+        mocker, overrides={"comments": [{"text": "**LLM Investigation summary:** already done"}]}
+    )
+
+    llm_investigate.investigate("123", print_prompt=True)
+
+    client.post.assert_not_called()
+    mock_post.assert_not_called()
+    assert not any("/comments" in str(c.args[0]) for c in client.get.call_args_list)
+    output = mock_print.call_args[0][0]
+    assert all(s in output for s in ("Prompt 1/3", "Question 1", "Question 2", "Question 3"))
+
+
 def test_investigate_cmd_connection_error(mocker: MockerFixture) -> None:
     mock_log = mocker.patch("llm_investigate.log")
     client = setup_mock_client(mocker)
