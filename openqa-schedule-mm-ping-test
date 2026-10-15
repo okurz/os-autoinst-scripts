@@ -12,7 +12,7 @@ version=${version:-Tumbleweed}
 test_name=${test_name:-ping_client}
 # we expect build numbers in the ISO 8601 format so we're looking for build strings starting with eight latin numerals
 build_regex=${build_regex:-^[0-9]+$}
-machine=${machine:-64bit}
+machine=${machine:-uefi}
 
 tmpfile=$(mktemp)
 trap 'rm -f "$tmpfile"' EXIT
@@ -31,6 +31,7 @@ machines:
     backend: qemu
     settings:
       WORKER_CLASS: qemu_x86_64,tap
+      UEFI: '1'
 
 .common: &common
   BOOT_HDD_IMAGE: '1'
@@ -84,14 +85,20 @@ main() {
             *) break ;;
         esac
     done
+    jobdata=$(runcli openqa-cli api --host "$openqa_url" jobs version="$version" scope=relevant arch="$arch" machine="$machine" flavor="$flavor" test="$test_name" latest=1)
+    # shellcheck disable=SC2016 # not expanding the filter is deliberate
+    jobdata_newest=$(runjq -r --arg regex "$build_regex" '.jobs | map(select(.result == "passed")) | map(select (.settings.BUILD | match($regex))) | max_by(.settings.BUILD)' <<< "$jobdata")
     # shellcheck disable=SC2016
-    hdd=$(runcli openqa-cli api --host "$openqa_url" jobs version="$version" scope=relevant arch="$arch" machine="$machine" flavor="$flavor" test="$test_name" latest=1 | runjq -r --arg regex "$build_regex" '.jobs | map(select(.result == "passed")) | map(select (.settings.BUILD | match($regex))) | max_by(.settings.BUILD) .settings.HDD_1')
+    hdd=$(runjq -r '.settings.HDD_1' <<< "$jobdata_newest")
+    # shellcheck disable=SC2016
+    pflash_vars=$(runjq -r '.settings.UEFI_PFLASH_VARS' <<< "$jobdata_newest") # ensure bootloader entry from parent is used
     time openqa-cli schedule \
         --monitor --follow \
         --host "$openqa_url" \
         --param-file SCENARIO_DEFINITIONS_YAML="$tmpfile" \
         DISTRI="$distri" VERSION="$version" FLAVOR="$flavor_override" ARCH="$arch" \
         BUILD="$(date -Im)" _GROUP_ID=0 \
+        UEFI_PFLASH_VARS="$pflash_vars" \
         HDD_1="$hdd"
 }
 
