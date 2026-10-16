@@ -46,13 +46,13 @@ Job details:
 - Version: {version}
 - Arch: {arch}
 - Flavor: {flavor}
-- Result: {result}
+- Result: {result}{prompt_extension_text}
 
 Investigation info (diff to last good):
 {investigation_info}
 
 Failure analysis (context window of {context_lines} lines{truncated}):
-{analysis}{prompt_extension_text}
+{analysis}
 
 You will get a few short questions about this failure. Answer each exactly as asked and nothing else.
 Do not invent causes and never ask for more data.
@@ -493,8 +493,8 @@ def _verdict_question(stats: dict[str, Any], opts: Options) -> str:
 def _build_prompt(job: dict[str, Any], analysis: str, stats: dict[str, Any], opts: Options) -> str:
     settings = job.get("settings", {})
     failed_modules = [m.get("name", "unknown") for m in job.get("testresults", []) if m.get("result") == "failed"]
-    extension = settings.get("LLM_PROMPT_EXTENSION")
-    extension_text = f"\n\nTest-specific instructions from openQA variables:\n{extension}\n" if extension else ""
+    extension = str(settings.get("LLM_PROMPT_EXTENSION") or "").strip()
+    extension_text = f"\n\nAdditional instructions for this test:\n{extension}" if extension else ""
     analysis, truncated = _cap_lines(analysis, opts.log_lines)
     if truncated:
         log.info("Failure analysis cut to --log-lines=%d; raise it if the cut-off tail matters", opts.log_lines)

@@ -199,6 +199,8 @@ As an example, if the `retry` fails, `last_good_tests` fails, but
 `last_good_build` and `last_good_tests_and_build` pass, it's likely an issue
 with the product.
 
+`openqa-llm-investigate` passes the optional openQA variable `LLM_PROMPT_EXTENSION` (per test suite or job group) to the LLM.
+
 ### Configuration
 
 `openqa-label-known-issues-and-investigate-hook` recognizes the following
