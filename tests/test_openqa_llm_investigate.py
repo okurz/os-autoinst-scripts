@@ -1061,3 +1061,24 @@ def test_investigate_drops_placeholder_reasons_from_comment(mocker: MockerFixtur
 
     mock_print.assert_called_once_with("https://openqa.opensuse.org/tests/123")
     assert mock_post.call_args[0][2].endswith("BISECT: YES\nRestart: NO")
+
+
+def _prompt(extension: Any) -> str:
+    settings = {} if extension is None else {"LLM_PROMPT_EXTENSION": extension}
+    stats = {"investigation_info": "None"}
+    return llm_investigate._build_prompt(
+        {"settings": settings}, "analysis", stats, llm_investigate.Options("http://llm", "m", None, 1, 50, 100, 10, 5)
+    )
+
+
+def test_build_prompt_additional_instructions_after_job_details() -> None:
+    prompt = _prompt("Ignore known flaky x11 tests.")
+    assert "Additional instructions for this test:\nIgnore known flaky x11 tests." in prompt
+    assert prompt.index("- Result:") < prompt.index("Additional instructions") < prompt.index("Investigation info")
+
+
+@pytest.mark.parametrize("extension", [None, "", "  \n"])
+def test_build_prompt_ignores_empty_additional_instructions(extension: str | None) -> None:
+    prompt = _prompt(extension)
+    assert "Additional instructions" not in prompt
+    assert "- Result: unknown\n\nInvestigation info" in prompt
