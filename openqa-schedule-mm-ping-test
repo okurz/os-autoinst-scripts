@@ -1,33 +1,29 @@
-#!/bin/bash
-set -eu -o pipefail
+#!/usr/bin/env python3
+# Copyright SUSE LLC
+"""Schedule openQA multi-machine ping tests used in CI monitoring jobs."""
 
-. "$(dirname "$0")"/_common
+from __future__ import annotations
 
-openqa_url=${openqa_url:-https://openqa.opensuse.org}
-distri=${distri:-opensuse}
-flavor=${flavor:-DVD}
-flavor_override=${flavor_override:-mm-monitoring} # override flavor to avoid obsoletion by other scheduled products
-arch=${arch:-x86_64}
-version=${version:-Tumbleweed}
-test_name=${test_name:-ping_client}
-# we expect build numbers in the ISO 8601 format so we're looking for build strings starting with eight latin numerals
-build_regex=${build_regex:-^[0-9]+$}
-machine=${machine:-uefi}
+import datetime as dt
+import re
+import subprocess
+import tempfile
+from typing import Annotated
 
-tmpfile=$(mktemp)
-trap 'rm -f "$tmpfile"' EXIT
+import typer
+from openqa_client.client import OpenQA_Client
+from openqa_client.exceptions import OpenQAClientError
 
-cat > "$tmpfile" << EOF
----
+SCENARIO_YAML = """---
 products:
   mm-ping-test:
-    distri: $distri
-    flavor: $flavor_override
-    arch: $arch
-    version: $version
+    distri: {distri}
+    flavor: {flavor_override}
+    arch: {arch}
+    version: {version}
 
 machines:
-  ${machine}:
+  {machine}:
     backend: qemu
     settings:
       WORKER_CLASS: qemu_x86_64,tap
@@ -45,61 +41,118 @@ machines:
 job_templates:
   ping_server:
     product: mm-ping-test
-    machine: $machine
+    machine: {machine}
     settings:
       <<: *common
       HOSTNAME: server
   ping_client:
     product: mm-ping-test
-    machine: $machine
+    machine: {machine}
     settings:
       <<: *common
       HOSTNAME: client
       PARALLEL_WITH: ping_server
-EOF
+"""
 
-usage() {
-    cat << EOF
-Usage: $0 [OPTIONS]
+app = typer.Typer(add_completion=False, context_settings={"help_option_names": ["-h", "--help"]})
 
-Schedules openQA multi-machine "ping tests". Used in CI monitoring jobs.
 
-Can be configured additionally with environment variables.
+@app.command()
+def main(  # ruff: ignore[too-many-arguments]
+    *,
+    host: Annotated[str, typer.Option(envvar="openqa_url", help="openQA host URL.")] = "https://openqa.opensuse.org",
+    distri: Annotated[str, typer.Option(envvar="distri")] = "opensuse",
+    flavor: Annotated[str, typer.Option(envvar="flavor", help="Flavor to find the latest passed build for.")] = "DVD",
+    flavor_override: Annotated[
+        str, typer.Option(envvar="flavor_override", help="Flavor to schedule with, avoids obsoletion.")
+    ] = "mm-monitoring",
+    arch: Annotated[str, typer.Option(envvar="arch")] = "x86_64",
+    version: Annotated[str, typer.Option(envvar="version")] = "Tumbleweed",
+    test_name: Annotated[
+        str, typer.Option(envvar="test_name", help="Test to find the latest passed build for.")
+    ] = "ping_client",
+    build_regex: Annotated[
+        str, typer.Option(envvar="build_regex", help="Regex a passed job's BUILD must match.")
+    ] = r"^[0-9]+$",
+    machine: Annotated[str, typer.Option(envvar="machine")] = "uefi",
+    monitor: Annotated[bool, typer.Option("--monitor/--no-monitor", help="Monitor jobs until completion.")] = True,
+    follow: Annotated[bool, typer.Option("--follow/--no-follow", help="Follow jobs if restarted or cloned.")] = True,
+    poll_interval: Annotated[
+        int | None, typer.Option(help="Seconds between job polls; defaults to openqa-cli's.")
+    ] = None,
+) -> None:
+    """Schedule openQA multi-machine ping tests used in CI monitoring jobs."""
+    try:
+        pattern = re.compile(build_regex)
+    except re.error as exc:
+        msg = f"invalid regex: {exc}"
+        raise typer.BadParameter(msg, param_hint="--build-regex") from exc
 
-Options:
- -h, --help         display this help
-EOF
-    exit "$1"
-}
+    try:
+        jobs = (
+            OpenQA_Client(server=host)
+            .openqa_request(
+                "GET",
+                "jobs",
+                params={
+                    "version": version,
+                    "scope": "relevant",
+                    "arch": arch,
+                    "machine": machine,
+                    "flavor": flavor,
+                    "test": test_name,
+                    "latest": 1,
+                },
+            )
+            .get("jobs", [])
+        )
+    except OpenQAClientError as exc:
+        typer.echo(f"Error finding latest HDD: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
-main() {
-    opts=$(getopt -o h -l help -n "$0" -- "$@") || usage 1
-    eval set -- "$opts"
-    while true; do
-        case "$1" in
-            -h | --help) usage 0 ;;
-            --)
-                shift
-                break
-                ;;
-            *) break ;;
-        esac
-    done
-    jobdata=$(runcli openqa-cli api --host "$openqa_url" jobs version="$version" scope=relevant arch="$arch" machine="$machine" flavor="$flavor" test="$test_name" latest=1)
-    # shellcheck disable=SC2016 # not expanding the filter is deliberate
-    jobdata_newest=$(runjq -r --arg regex "$build_regex" '.jobs | map(select(.result == "passed")) | map(select (.settings.BUILD | match($regex))) | max_by(.settings.BUILD)' <<< "$jobdata")
-    # shellcheck disable=SC2016
-    hdd=$(runjq -r '.settings.HDD_1' <<< "$jobdata_newest")
-    # shellcheck disable=SC2016
-    pflash_vars=$(runjq -r '.settings.UEFI_PFLASH_VARS' <<< "$jobdata_newest") # ensure bootloader entry from parent is used
-    time openqa-cli schedule \
-        --monitor --follow \
-        --host "$openqa_url" \
-        --param-file SCENARIO_DEFINITIONS_YAML="$tmpfile" \
-        DISTRI="$distri" VERSION="$version" FLAVOR="$flavor_override" ARCH="$arch" \
-        BUILD="$(date -Im)" _GROUP_ID=0 \
-        UEFI_PFLASH_VARS="$pflash_vars" \
-        HDD_1="$hdd"
-}
+    passed = [job.get("settings", {}) for job in jobs if job.get("result") == "passed"]
+    matching = [settings for settings in passed if pattern.search(settings.get("BUILD", ""))]
+    latest = max(matching, key=lambda settings: settings.get("BUILD", ""), default={})
+    hdd = latest.get("HDD_1")
+    if not hdd:
+        typer.echo("Could not find a passed job with HDD_1", err=True)
+        raise typer.Exit(1)
 
-caller 0 > /dev/null || main "$@"
+    build = dt.datetime.now().astimezone().isoformat(timespec="minutes")
+    settings = {
+        "DISTRI": distri,
+        "VERSION": version,
+        "FLAVOR": flavor_override,
+        "ARCH": arch,
+        "BUILD": build,
+        "_GROUP_ID": "0",
+        "HDD_1": hdd,
+    }
+    if pflash_vars := latest.get("UEFI_PFLASH_VARS"):
+        settings["UEFI_PFLASH_VARS"] = pflash_vars
+    cmd = ["openqa-cli", "schedule", "--host", host]
+    if poll_interval is not None:
+        cmd += ["--poll-interval", str(poll_interval)]
+    if monitor:
+        cmd.append("--monitor")
+    if follow:
+        cmd.append("--follow")
+
+    scenario_yaml = SCENARIO_YAML.format(
+        distri=distri, flavor_override=flavor_override, arch=arch, version=version, machine=machine
+    )
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".yaml") as scenario_file:
+        scenario_file.write(scenario_yaml)
+        scenario_file.flush()
+        cmd += ["--param-file", f"SCENARIO_DEFINITIONS_YAML={scenario_file.name}"]
+        cmd += [f"{key}={value}" for key, value in settings.items()]
+        try:
+            returncode = subprocess.run(cmd, check=False).returncode
+        except FileNotFoundError:
+            typer.echo("openqa-cli not found", err=True)
+            returncode = 1
+    raise typer.Exit(returncode)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    app()
