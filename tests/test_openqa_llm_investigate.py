@@ -897,6 +897,98 @@ def test_unknown_llm_api_is_rejected() -> None:
     assert CliRunner().invoke(llm_investigate.app, ["123", "--llm-api", "nope"]).exit_code == 2
 
 
+def _vertex_env(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, creds: dict[str, str]) -> None:
+    f = tmp_path / "adc.json"
+    f.write_text(json.dumps(creds))
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", str(f))
+    monkeypatch.setenv("GCLOUD_PROJECT", "proj")
+    monkeypatch.delenv("VERTEX_LOCATION", raising=False)
+
+
+def test_investigate_vertex_uses_refreshed_token_and_openai_payload(
+    mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    mocker.patch("llm_investigate.post_comment")
+    mocker.patch("llm_investigate.typer.echo")
+    _vertex_env(
+        monkeypatch, tmp_path, {"type": "authorized_user", "client_id": "i", "client_secret": "s", "refresh_token": "r"}
+    )
+    client = setup_mock_client(mocker)
+    chat = client.post.side_effect
+    client.post.side_effect = lambda url, **kw: (
+        Mock(json=Mock(return_value={"access_token": "tok"}), raise_for_status=Mock())
+        if "oauth2" in url
+        else chat(url, **kw)
+    )
+
+    llm_investigate.investigate("123", llm_api=llm_investigate.LlmApi.VERTEX)
+
+    token_call, chat_call = client.post.call_args_list[:2]
+    assert token_call.kwargs["data"] == {
+        "client_id": "i",
+        "client_secret": "s",
+        "refresh_token": "r",
+        "grant_type": "refresh_token",
+    }
+    assert chat_call.args[0] == (
+        "https://aiplatform.googleapis.com/v1/projects/proj/locations/global/endpoints/openapi/chat/completions"
+    )
+    assert chat_call.kwargs["headers"] == {"Authorization": "Bearer tok"}
+    assert chat_call.kwargs["json"]["temperature"] == pytest.approx(0.3)
+
+
+def test_vertex_request_regional_url_and_explicit_token(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    _vertex_env(monkeypatch, tmp_path, {})
+    monkeypatch.setenv("VERTEX_LOCATION", "europe-west4")
+    client = Mock()
+
+    url, token = llm_investigate._vertex_request(client, "explicit")
+
+    assert url.startswith("https://europe-west4-aiplatform.googleapis.com/v1/projects/proj/locations/europe-west4/")
+    assert token == "explicit"
+    client.post.assert_not_called()
+
+
+def test_investigate_vertex_claude_uses_raw_predict(
+    mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    mocker.patch("llm_investigate.post_comment")
+    mocker.patch("llm_investigate.typer.echo")
+    _vertex_env(monkeypatch, tmp_path, {})
+    client = setup_mock_client(mocker)
+    client.post.side_effect = None
+    client.post.return_value = Mock(json=Mock(return_value={"content": [{"type": "text", "text": "BISECT: NO"}]}))
+
+    llm_investigate.investigate(
+        "123", llm_api=llm_investigate.LlmApi.VERTEX, llm_model="claude-haiku-4-5", llm_token="t"
+    )
+
+    chat_call = client.post.call_args_list[0]
+    assert chat_call.args[0].endswith("/locations/global/publishers/anthropic/models/claude-haiku-4-5:rawPredict")
+    payload = chat_call.kwargs["json"]
+    assert payload["anthropic_version"] == "vertex-2023-10-16"
+    assert payload["max_tokens"] == 4096
+    assert "temperature" not in payload
+    assert "model" not in payload
+
+
+def test_vertex_request_without_project_exits(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GCLOUD_PROJECT", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+
+    with pytest.raises(SystemExit):
+        llm_investigate._vertex_request(Mock(), "t")
+
+
+def test_vertex_request_rejects_service_account(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
+    _vertex_env(monkeypatch, tmp_path, {"type": "service_account"})
+
+    with pytest.raises(SystemExit):
+        llm_investigate._vertex_request(Mock(), None)
+
+
 def test_investigate_asks_three_questions_in_one_growing_chat(mocker: MockerFixture) -> None:
     mocker.patch("llm_investigate.post_comment")
     mocker.patch("llm_investigate.typer.echo")

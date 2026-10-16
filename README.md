@@ -162,6 +162,11 @@ following scripts are provided:
   found, "openqa-investigate". Compare to section
   "Combine auto-review and openqa-investigate"
 
+### openqa-llm-investigate - LLM failure analysis, also on Google Vertex AI
+
+Set `GOOGLE_APPLICATION_CREDENTIALS` and `GCLOUD_PROJECT` (optionally `VERTEX_LOCATION`, default `global`), then e.g.
+`LLM_API=vertex LLM_MODEL=claude-sonnet-5-5@default ./openqa-llm-investigate https://openqa.opensuse.org/tests/123`.
+
 ### More details and examples about openqa-investigate comments
 
 Let's say we have a failed test `openqa-Tumbleweed-dev-x86_64-Build:TW.315-vim`.

@@ -16,6 +16,7 @@ from email.utils import parsedate_to_datetime
 from enum import StrEnum
 from http import HTTPStatus
 from operator import itemgetter
+from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlparse, urlunparse
 
@@ -202,6 +203,7 @@ class LlmApi(StrEnum):
     AUTO = "auto"
     OPENAI = "openai"
     OLLAMA = "ollama"
+    VERTEX = "vertex"
 
 
 @dataclass(frozen=True)
@@ -309,22 +311,62 @@ def _api_kind(opts: Options) -> LlmApi:
     return LlmApi.OLLAMA if urlparse(opts.llm_url).path.rstrip("/").endswith("/api/chat") else LlmApi.OPENAI
 
 
+def _is_claude(opts: Options) -> bool:
+    return _api_kind(opts) == LlmApi.VERTEX and opts.llm_model.startswith("claude")
+
+
 def _llm_payload(opts: Options, messages: list[dict[str, str]], temperature: float) -> dict[str, Any]:
+    if _is_claude(opts):
+        return {"anthropic_version": "vertex-2023-10-16", "max_tokens": 4096, "messages": messages}
     req: dict[str, Any] = {"model": opts.llm_model, "messages": messages}
-    if _api_kind(opts) == LlmApi.OPENAI:
+    if _api_kind(opts) != LlmApi.OLLAMA:
         return req | {"temperature": temperature}
     options = {"temperature": temperature} | ({"num_ctx": opts.context_tokens} if opts.context_tokens else {})
     return req | {"stream": False, "options": options}
 
 
+def _google_access_token(client: httpx.Client) -> str:
+    """Exchange the refresh token in `GOOGLE_APPLICATION_CREDENTIALS` for an access token."""
+    try:
+        creds = json.loads(Path(os.environ["GOOGLE_APPLICATION_CREDENTIALS"]).read_text(encoding="utf-8"))
+        data = {k: creds[k] for k in ("client_id", "client_secret", "refresh_token")} | {"grant_type": "refresh_token"}
+        res = client.post("https://oauth2.googleapis.com/token", data=data)
+        res.raise_for_status()
+        return res.json()["access_token"]
+    except (KeyError, OSError, ValueError, httpx.HTTPError):
+        log.exception("Could not get a Google access token (only authorized_user credentials are supported)")
+        sys.exit(1)
+
+
+def _vertex_request(client: httpx.Client, token: str | None, model: str = "") -> tuple[str, str]:
+    """Return the Vertex chat URL (Claude: `rawPredict`, else OpenAI-compatible) and a bearer token."""
+    project = os.environ.get("GCLOUD_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+    if not project:
+        log.error("Set GCLOUD_PROJECT for --llm-api=vertex")
+        sys.exit(1)
+    loc = os.environ.get("VERTEX_LOCATION", "global")
+    host = "aiplatform.googleapis.com" if loc == "global" else f"{loc}-aiplatform.googleapis.com"
+    base = f"https://{host}/v1/projects/{project}/locations/{loc}"
+    url = (
+        f"{base}/publishers/anthropic/models/{model}:rawPredict"
+        if model.startswith("claude")
+        else f"{base}/endpoints/openapi/chat/completions"
+    )
+    return url, token or _google_access_token(client)
+
+
 def _call_llm_api(client: httpx.Client, opts: Options, messages: list[dict[str, str]], temperature: float) -> str:
     llm_url, llm_model, llm_token, timeout = opts.llm_url, opts.llm_model, opts.llm_token, opts.llm_timeout
     kind = _api_kind(opts)
+    if kind == LlmApi.VERTEX:
+        llm_url, llm_token = _vertex_request(client, llm_token, llm_model)
     headers = {"Authorization": f"Bearer {llm_token}"} if llm_token else {}
     try:
         res = client.post(llm_url, json=_llm_payload(opts, messages, temperature), headers=headers, timeout=timeout)
         res.raise_for_status()
         res_json = res.json()
+        if _is_claude(opts):
+            return res_json["content"][0]["text"]
         return res_json["message"]["content"] if kind == LlmApi.OLLAMA else res_json["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError):
         log.exception("LLM API %s (%s) sent no usable %s chat response", llm_url, llm_model, kind)
@@ -633,7 +675,8 @@ def investigate(  # ruff: ignore[too-many-arguments, too-many-positional-argumen
         typer.Option(
             "--llm-api",
             envvar="LLM_API",
-            help="Chat API flavour; auto selects ollama for URLs ending in /api/chat, else openai",
+            help="Chat API flavour; auto selects ollama for URLs ending in /api/chat, else openai."
+            " vertex uses GOOGLE_APPLICATION_CREDENTIALS, GCLOUD_PROJECT, VERTEX_LOCATION (default global)",
         ),
     ] = LlmApi.AUTO,
     log_lines: Annotated[
