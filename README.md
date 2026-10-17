@@ -162,9 +162,19 @@ following scripts are provided:
   found, "openqa-investigate". Compare to section
   "Combine auto-review and openqa-investigate"
 
-### openqa-llm-investigate - LLM failure analysis, also on Google Vertex AI
+### openqa-llm-investigate
 
-Set `GOOGLE_APPLICATION_CREDENTIALS` and `GCLOUD_PROJECT` (optionally `VERTEX_LOCATION`, default `global`), then e.g.
+`openqa-llm-investigate` asks an LLM to analyze a failed openQA job and posts the summary as a comment on that job.
+
+It passes the optional openQA variable `LLM_PROMPT_EXTENSION` (per test suite or job group) to the LLM.
+
+To run it manually without posting a comment, with the dependencies from `pyproject.toml` installed:
+`LLM_API_URL=<url> LLM_MODEL=<model> LLM_API_TOKEN=<token> ./openqa-llm-investigate --dry https://openqa.opensuse.org/tests/123`
+
+Or with [uv](https://docs.astral.sh/uv/), which installs the dependencies for you:
+`LLM_API_URL=<url> LLM_MODEL=<model> LLM_API_TOKEN=<token> uv run python ./openqa-llm-investigate --dry https://openqa.opensuse.org/tests/123`
+
+For Google Vertex AI, set `GOOGLE_APPLICATION_CREDENTIALS` and `GCLOUD_PROJECT` (optionally `VERTEX_LOCATION`, default `global`), then e.g.
 `LLM_API=vertex LLM_MODEL=claude-sonnet-5-5@default ./openqa-llm-investigate https://openqa.opensuse.org/tests/123`.
 
 ### More details and examples about openqa-investigate comments
@@ -203,8 +213,6 @@ an issue with the new build or the changes in the test code or something else.
 As an example, if the `retry` fails, `last_good_tests` fails, but
 `last_good_build` and `last_good_tests_and_build` pass, it's likely an issue
 with the product.
-
-`openqa-llm-investigate` passes the optional openQA variable `LLM_PROMPT_EXTENSION` (per test suite or job group) to the LLM.
 
 ### Configuration
 

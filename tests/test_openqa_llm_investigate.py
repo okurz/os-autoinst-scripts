@@ -205,6 +205,7 @@ def test_investigate_cmd(mocker: MockerFixture) -> None:
     comment = mock_post.call_args[0][2]
     assert comment.index("* isosize:") < comment.index("`isosize` module died") < comment.index("Classification:")
     assert "BISECT: YES" in comment
+    assert comment.endswith(f"\n\n{llm_investigate.COMMENT_FOOTER}")
     assert client.post.call_count == 3
     ajax_calls = [call for call in client.get.call_args_list if "investigation_ajax" in call[0][0]]
     assert len(ajax_calls) == 1
@@ -282,7 +283,9 @@ def test_investigate_cmd_dry_run(mocker: MockerFixture) -> None:
 
     # In dry run, it should print the summary instead of posting
     mock_post.assert_not_called()
-    mock_print.assert_any_call("**LLM Investigation summary:**\n\n" + "\n\n".join(["BISECT: NO. Already known."] * 3))
+    summary = "\n\n".join(["BISECT: NO. Already known."] * 3)
+    mock_print.assert_any_call(f"**LLM Investigation summary:**\n\n{summary}")
+    assert all(llm_investigate.COMMENT_FOOTER not in str(c) for c in mock_print.call_args_list)
 
 
 def test_investigate_cmd_print_prompt(mocker: MockerFixture) -> None:
@@ -1060,7 +1063,7 @@ def test_investigate_drops_placeholder_reasons_from_comment(mocker: MockerFixtur
     llm_investigate.investigate("123")
 
     mock_print.assert_called_once_with("https://openqa.opensuse.org/tests/123")
-    assert mock_post.call_args[0][2].endswith("BISECT: YES\nRestart: NO")
+    assert mock_post.call_args[0][2].endswith(f"BISECT: YES\nRestart: NO\n\n{llm_investigate.COMMENT_FOOTER}")
 
 
 def _prompt(extension: Any) -> str:
