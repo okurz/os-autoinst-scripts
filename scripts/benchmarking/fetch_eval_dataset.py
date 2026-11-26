@@ -11,6 +11,7 @@ ground-truth evaluation dataset for model benchmarking.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import logging
 import re
@@ -19,6 +20,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,7 @@ USER_AGENT = "o3-llm-eval/1.0"
 REQUEST_DELAY = 0.05  # Politeness delay between API queries
 MIN_COMMENTS_FOR_HEURISTIC = 2
 FAILED_RESULTS = frozenset({"failed", "incomplete", "timeout_exceeded", "parallel_failed"})
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -84,6 +87,41 @@ class GroundTruth:
     source: str
     reference: str
     confidence: str  # 'high' (bugzilla/ticket link) or 'medium' (heuristic comment)
+
+
+@dataclass(frozen=True)
+class Selection:
+    """The finished-date window and the per-ticket cap of a corpus query."""
+
+    since: dt.date | None = None
+    until: dt.date | None = None
+    max_per_ticket: int | None = None
+
+
+@dataclass(frozen=True)
+class CorpusRow:
+    """One referenced job of the corpus, without its LLM verdict or ticket answer."""
+
+    job_id: int
+    test_name: str
+    group_id: int | None
+    result: str
+    finished: str | None
+    reference: str
+
+
+@dataclass(frozen=True)
+class InventoryReport:
+    """LLM-commented jobs per month and rows per bug reference, for a finished-date window."""
+
+    jobs: int
+    rows_with_reference: int
+    references: dict[str, int]
+    months: dict[str, int]
+    earliest: str | None
+    latest: str | None
+    since: dt.date | None
+    until: dt.date | None
 
 
 @dataclass
@@ -283,15 +321,149 @@ def _entry_for_job(host: str, job: dict[str, Any]) -> EvalEntry | None:
     )
 
 
+DEFAULT_SELECTION = Selection()
+
+
+def parse_iso_date(value: str) -> dt.date:
+    """Parse a YYYY-MM-DD window bound for the argparse layer."""
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError as err:
+        msg = f"invalid date {value!r}, expected YYYY-MM-DD"
+        raise argparse.ArgumentTypeError(msg) from err
+
+
+def job_finished_date(job: dict[str, Any]) -> dt.date | None:
+    """Return the job's finished date, or None when it is absent or malformed."""
+    finished = str(job.get("finished") or "")
+    if not finished:
+        return None
+    try:
+        return dt.datetime.fromisoformat(finished).date()
+    except ValueError:
+        return None
+
+
+def in_window(job: dict[str, Any], since: dt.date | None, until: dt.date | None) -> bool:
+    """Check a job against an inclusive finished-date window."""
+    if since is None and until is None:
+        return True
+    day = job_finished_date(job)
+    if day is None:
+        return False
+    return (since is None or day >= since) and (until is None or day <= until)
+
+
+def row_references(job: dict[str, Any]) -> list[str]:
+    """Return the distinct bug references a job carries, lowercased."""
+    bugs = (job.get("comment_data") or {}).get("bugs") or []
+    refs: list[str] = []
+    for bug in bugs:
+        ref = str(bug.get("content") or bug.get("url") or "").strip().lower()
+        if ref and ref not in refs:
+            refs.append(ref)
+    return refs
+
+
+def _tickets_capped(refs: list[str], counts: Counter[str], cap: int | None) -> bool:
+    return bool(cap is not None and refs and all(counts[ref] >= cap for ref in refs))
+
+
+def build_corpus_rows(
+    host: str = DEFAULT_HOST,
+    max_jobs: int = 500,
+    groups: list[int] | None = None,
+    selection: Selection = DEFAULT_SELECTION,
+) -> list[CorpusRow]:
+    """Collect one row per referenced job, capped per ticket and without any extra request."""
+    rows: list[CorpusRow] = []
+    per_reference: Counter[str] = Counter()
+    for job in _candidate_jobs(host, max_jobs, groups):
+        if not in_window(job, selection.since, selection.until):
+            continue
+        if not job.get("id"):
+            continue
+        references = row_references(job)
+        if not references:
+            continue
+        if selection.max_per_ticket is not None and per_reference[references[0]] >= selection.max_per_ticket:
+            continue
+        per_reference[references[0]] += 1
+        rows.append(
+            CorpusRow(
+                job_id=int(job["id"]),
+                test_name=str(job.get("test") or ""),
+                group_id=job.get("group"),
+                result=str(job.get("result") or ""),
+                finished=job.get("finished"),
+                reference=references[0],
+            )
+        )
+    return rows
+
+
+def build_inventory(
+    host: str = DEFAULT_HOST,
+    max_jobs: int = 500,
+    groups: list[int] | None = None,
+    selection: Selection = DEFAULT_SELECTION,
+) -> InventoryReport:
+    """Count LLM-commented jobs per month and per bug reference, read-only."""
+    jobs = [job for job in _candidate_jobs(host, max_jobs, groups) if in_window(job, selection.since, selection.until)]
+    months = Counter(day.strftime("%Y-%m") if (day := job_finished_date(job)) else "unknown" for job in jobs)
+    references: Counter[str] = Counter()
+    rows_with_reference = 0
+    for job in jobs:
+        refs = row_references(job)
+        if refs:
+            rows_with_reference += 1
+        references.update(refs)
+    finished = sorted(day for job in jobs if (day := job_finished_date(job)) is not None)
+    return InventoryReport(
+        jobs=len(jobs),
+        rows_with_reference=rows_with_reference,
+        references=dict(references.most_common()),
+        months=dict(sorted(months.items())),
+        earliest=finished[0].isoformat() if finished else None,
+        latest=finished[-1].isoformat() if finished else None,
+        since=selection.since,
+        until=selection.until,
+    )
+
+
+def format_inventory(report: InventoryReport) -> str:
+    """Render an inventory report as a plain-text summary."""
+    window = f"{report.since or 'start'} .. {report.until or 'end'}"
+    lines = [
+        f"Inventory: {report.jobs} LLM-commented jobs in window {window}",
+        f"Fetched finished range: {report.earliest or '-'} .. {report.latest or '-'}",
+        "",
+        "Jobs per month:",
+    ]
+    lines.extend(f"{month}  {count}" for month, count in report.months.items())
+    lines.extend([
+        "",
+        (
+            f"Bug references: {len(report.references)} distinct, "
+            f"{report.rows_with_reference} jobs carry one, "
+            f"{report.jobs - report.rows_with_reference} jobs carry none"
+        ),
+    ])
+    lines.extend(f"{ref}  {count}" for ref, count in report.references.items())
+    return "\n".join(lines)
+
+
 def build_dataset(
     host: str = DEFAULT_HOST,
     max_jobs: int = 500,
     groups: list[int] | None = None,
     min_entries: int = 50,
+    selection: Selection = DEFAULT_SELECTION,
 ) -> list[EvalEntry]:
     """Retrieve jobs, fetch comments, extract LLM verdicts and ground truth."""
     eval_entries: list[EvalEntry] = []
     seen_job_ids: set[int] = set()
+    per_reference: Counter[str] = Counter()
 
     for job in _candidate_jobs(host, max_jobs, groups):
         jid = job.get("id")
@@ -299,9 +471,19 @@ def build_dataset(
             continue
         seen_job_ids.add(jid)
 
+        if not in_window(job, selection.since, selection.until):
+            continue
+        if _tickets_capped(row_references(job), per_reference, selection.max_per_ticket):
+            continue
+
         entry = _entry_for_job(host, job)
         if not entry:
             continue
+
+        reference = entry.reference.strip().lower()
+        if selection.max_per_ticket is not None and per_reference[reference] >= selection.max_per_ticket:
+            continue
+        per_reference[reference] += 1
 
         eval_entries.append(entry)
         logger.info(
@@ -349,13 +531,58 @@ def main() -> int:
         default=[1, 3, 38, 139],
         help="Job group IDs to query (default: 1 3 38 139)",
     )
+    parser.add_argument("--since", type=parse_iso_date, help="Earliest finished date, YYYY-MM-DD (inclusive)")
+    parser.add_argument("--until", type=parse_iso_date, help="Latest finished date, YYYY-MM-DD (inclusive)")
+    parser.add_argument("--max-per-ticket", type=int, help="Cap the rows that share one bug reference")
+    parser.add_argument(
+        "--inventory",
+        action="store_true",
+        help="Report jobs per month and rows per bug reference, write nothing",
+    )
+    parser.add_argument(
+        "--corpus-output",
+        type=Path,
+        help="Write the referenced job rows (no per-job requests) to this JSON file",
+    )
     args = parser.parse_args()
+
+    selection = Selection(since=args.since, until=args.until, max_per_ticket=args.max_per_ticket)
+
+    if args.inventory:
+        report = build_inventory(args.host, args.limit, args.groups, selection)
+        print(format_inventory(report))  # ruff: ignore[print]
+        return 0
+
+    if args.corpus_output:
+        rows = build_corpus_rows(args.host, args.limit, args.groups, selection)
+        payload = {
+            "metadata": {
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "host": args.host,
+                "since": str(args.since) if args.since else None,
+                "until": str(args.until) if args.until else None,
+                "max_per_ticket": args.max_per_ticket,
+                "rows": len(rows),
+                "references": len({row.reference for row in rows}),
+            },
+            "entries": [asdict(row) for row in rows],
+        }
+        with Path(args.corpus_output).open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=1)
+        logger.info(
+            "Wrote %d rows over %d references to %s",
+            len(rows),
+            len({row.reference for row in rows}),
+            args.corpus_output,
+        )
+        return 0
 
     entries = build_dataset(
         host=args.host,
         max_jobs=args.limit,
         groups=args.groups,
         min_entries=args.min_entries,
+        selection=selection,
     )
 
     if not entries:
