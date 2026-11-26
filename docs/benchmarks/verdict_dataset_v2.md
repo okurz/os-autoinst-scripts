@@ -18,10 +18,11 @@ python3 scripts/benchmarking/audit_ticket_labels.py --from-dataset /tmp/corpus_v
   --annotate-dataset /tmp/corpus_v2.json --output tests/data/eval_dataset_v2.json
 ```
 
-The corpus tool lives in the o3-config checkout (`scripts/benchmarking/fetch_eval_dataset.py`), the
-ticket audit in this repository (`scripts/benchmarking/audit_ticket_labels.py`). `--force-unclear` is the policy's contradiction rule and is
-not in use: the `esc` pair was ruled on 2026-11-26 (`boo#1289464` product, `poo#209751` test), so both
-sets of rows are scored. Ticket answers are cached under
+Both tools live in this repository: `scripts/benchmarking/fetch_eval_dataset.py` selects the corpus rows
+and `scripts/benchmarking/audit_ticket_labels.py` resolves the tickets and writes the dataset. The policy
+they apply is `docs/research/verdict_label_policy.md`. `--force-unclear` is the policy's contradiction
+rule and is not in use: the `esc` pair was ruled on 2026-11-26 (`boo#1289464` product, `poo#209751`
+test), so both sets of rows are scored. Ticket answers are cached under
 `~/.cache/o3-config/audit_ticket_labels/`, so a re-run needs `--refresh` to query the trackers again.
 
 ## Corpus
@@ -40,7 +41,7 @@ corpus was assembled from one query per o3 job group (112 groups) and filtered o
 A job with several references contributes to the first one only, and the cap keeps at most five rows per
 ticket, so the dataset covers every reference the corpus offered and spends at most five rows on it.
 Four busy groups (1, 3, 38, 132) hit the server's row cap before the window start, so their oldest rows
-are missing; see `docs/benchmarks/llm_corpus_inventory.md` in the o3-config checkout.
+are missing; see `docs/benchmarks/llm_corpus_inventory.md`.
 
 ## Classes and confidence
 
