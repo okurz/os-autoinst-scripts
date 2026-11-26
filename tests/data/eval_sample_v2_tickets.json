@@ -1,0 +1,519 @@
+{
+ "metadata": {
+  "source": "tests/data/eval_dataset_v2.json",
+  "rule": "one row per scored ticket, the lowest job id, sorted by ticket",
+  "entries": 84,
+  "tickets": 84,
+  "labels": {
+   "infra": 2,
+   "product": 35,
+   "test": 47
+  }
+ },
+ "entries": [
+  {
+   "job_id": 6243160,
+   "test_name": "jeos-extra@aarch32-HD20G",
+   "ground_truth": "product",
+   "reference": "boo#1170723"
+  },
+  {
+   "job_id": 6210366,
+   "test_name": "jeos@aarch32-HD20G",
+   "ground_truth": "product",
+   "reference": "boo#1230849"
+  },
+  {
+   "job_id": 6210348,
+   "test_name": "jeos-fips@aarch64-HD20G",
+   "ground_truth": "product",
+   "reference": "boo#1246013"
+  },
+  {
+   "job_id": 6072338,
+   "test_name": "jeos-selinux@aarch64_armv9-HD20G",
+   "ground_truth": "product",
+   "reference": "boo#1252993"
+  },
+  {
+   "job_id": 6148544,
+   "test_name": "jeos-extra@64bit_virtio-4G",
+   "ground_truth": "product",
+   "reference": "boo#1263652"
+  },
+  {
+   "job_id": 6019809,
+   "test_name": "bci_ruby_podman@uefi",
+   "ground_truth": "product",
+   "reference": "boo#1268241"
+  },
+  {
+   "job_id": 6082793,
+   "test_name": "desktop_amusement_xfce@uefi-3G",
+   "ground_truth": "product",
+   "reference": "boo#1271112"
+  },
+  {
+   "job_id": 6117739,
+   "test_name": "install_only@64bit-multipath",
+   "ground_truth": "product",
+   "reference": "boo#1272188"
+  },
+  {
+   "job_id": 6169648,
+   "test_name": "ltp_dio@64bit",
+   "ground_truth": "test",
+   "reference": "boo#1275214"
+  },
+  {
+   "job_id": 6184150,
+   "test_name": "zdup_in_x_tw2twnext_kde@uefi-3G",
+   "ground_truth": "product",
+   "reference": "boo#1276489"
+  },
+  {
+   "job_id": 6218508,
+   "test_name": "kde_dual_windows10@uefi_win",
+   "ground_truth": "product",
+   "reference": "boo#1279962"
+  },
+  {
+   "job_id": 6212483,
+   "test_name": "microos-old2microosnext@uefi",
+   "ground_truth": "product",
+   "reference": "boo#1280003"
+  },
+  {
+   "job_id": 6230989,
+   "test_name": "jeos@RPi5",
+   "ground_truth": "product",
+   "reference": "boo#1282097"
+  },
+  {
+   "job_id": 6228381,
+   "test_name": "ltp_net_nfs@64bit",
+   "ground_truth": "product",
+   "reference": "boo#1282332"
+  },
+  {
+   "job_id": 6241966,
+   "test_name": "selinux@uefi",
+   "ground_truth": "product",
+   "reference": "boo#1283075"
+  },
+  {
+   "job_id": 6255312,
+   "test_name": "extra_tests_textmode@ppc64le",
+   "ground_truth": "product",
+   "reference": "boo#1283446"
+  },
+  {
+   "job_id": 6256539,
+   "test_name": "textmode_extra_tests_networking@uefi",
+   "ground_truth": "test",
+   "reference": "boo#1284511"
+  },
+  {
+   "job_id": 6341261,
+   "test_name": "create_hdd_agama_textmode@uefi-3G",
+   "ground_truth": "product",
+   "reference": "boo#1288617"
+  },
+  {
+   "job_id": 6303616,
+   "test_name": "kde@uefi-usb-4G",
+   "ground_truth": "product",
+   "reference": "boo#1288770"
+  },
+  {
+   "job_id": 6312426,
+   "test_name": "container_host_podman@ppc64le",
+   "ground_truth": "product",
+   "reference": "boo#1289089"
+  },
+  {
+   "job_id": 6317868,
+   "test_name": "gnome+apparmor@aarch64",
+   "ground_truth": "product",
+   "reference": "boo#1289464"
+  },
+  {
+   "job_id": 6074980,
+   "test_name": "nfs_client@64bit",
+   "ground_truth": "product",
+   "reference": "bsc#1264977"
+  },
+  {
+   "job_id": 6066534,
+   "test_name": "extra_tests_himmelblau@uefi",
+   "ground_truth": "product",
+   "reference": "bsc#1268646"
+  },
+  {
+   "job_id": 6112850,
+   "test_name": "ltp_syscalls_kotd@64bit",
+   "ground_truth": "product",
+   "reference": "bsc#1271647"
+  },
+  {
+   "job_id": 6098258,
+   "test_name": "yast2_gui@uefi",
+   "ground_truth": "test",
+   "reference": "poo#192280"
+  },
+  {
+   "job_id": 5999066,
+   "test_name": "extra_tests_gnome@uefi-3G",
+   "ground_truth": "product",
+   "reference": "poo#193708"
+  },
+  {
+   "job_id": 6100313,
+   "test_name": "bci_registry_podman@uefi",
+   "ground_truth": "test",
+   "reference": "poo#197435"
+  },
+  {
+   "job_id": 6166781,
+   "test_name": "desktopapps-gnome-wayland@aarch64",
+   "ground_truth": "test",
+   "reference": "poo#199463"
+  },
+  {
+   "job_id": 6147981,
+   "test_name": "textmode_extra_tests_utils@uefi",
+   "ground_truth": "test",
+   "reference": "poo#199868"
+  },
+  {
+   "job_id": 6006209,
+   "test_name": "textmode_extra_tests_networking@uefi-3G",
+   "ground_truth": "test",
+   "reference": "poo#200000"
+  },
+  {
+   "job_id": 6031856,
+   "test_name": "upgrade_Leap_15.1_gnome@aarch64",
+   "ground_truth": "test",
+   "reference": "poo#200928"
+  },
+  {
+   "job_id": 6141448,
+   "test_name": "jeos-apparmor@aarch64-HD20G",
+   "ground_truth": "test",
+   "reference": "poo#201084"
+  },
+  {
+   "job_id": 6007039,
+   "test_name": "ltp_mm@64bit",
+   "ground_truth": "product",
+   "reference": "poo#201585"
+  },
+  {
+   "job_id": 5977599,
+   "test_name": "textmode-extra@s390x-zVM-vswitch-l2",
+   "ground_truth": "test",
+   "reference": "poo#201789"
+  },
+  {
+   "job_id": 5982794,
+   "test_name": "openqa_install_nginx@uefi-4G",
+   "ground_truth": "product",
+   "reference": "poo#201906"
+  },
+  {
+   "job_id": 5991056,
+   "test_name": "gnome@uefi-3G",
+   "ground_truth": "test",
+   "reference": "poo#201942"
+  },
+  {
+   "job_id": 6003500,
+   "test_name": "xfstests_btrfs-generic-001-100@64bit",
+   "ground_truth": "test",
+   "reference": "poo#202317"
+  },
+  {
+   "job_id": 6005584,
+   "test_name": "storage_fde@uefi-3G",
+   "ground_truth": "test",
+   "reference": "poo#202368"
+  },
+  {
+   "job_id": 6005182,
+   "test_name": "kselftests-net@64bit",
+   "ground_truth": "test",
+   "reference": "poo#202386"
+  },
+  {
+   "job_id": 6020026,
+   "test_name": "ltp_net_stress_ipsec_icmp@ppc64le",
+   "ground_truth": "product",
+   "reference": "poo#202578"
+  },
+  {
+   "job_id": 6025961,
+   "test_name": "ltp_crypto_pty_commands@s390x-zVM-vswitch-l2",
+   "ground_truth": "product",
+   "reference": "poo#202656"
+  },
+  {
+   "job_id": 6051781,
+   "test_name": "gnome@64bit-3G",
+   "ground_truth": "test",
+   "reference": "poo#203262"
+  },
+  {
+   "job_id": 6059576,
+   "test_name": "gnome@ppc64le",
+   "ground_truth": "test",
+   "reference": "poo#203406"
+  },
+  {
+   "job_id": 6073500,
+   "test_name": "bci_python_3.11_podman@uefi",
+   "ground_truth": "test",
+   "reference": "poo#203544"
+  },
+  {
+   "job_id": 6074693,
+   "test_name": "kselftests-namespaces@64bit",
+   "ground_truth": "product",
+   "reference": "poo#203613"
+  },
+  {
+   "job_id": 6075229,
+   "test_name": "jeos@riscv64",
+   "ground_truth": "infra",
+   "reference": "poo#203625"
+  },
+  {
+   "job_id": 6088461,
+   "test_name": "openqa_install_multimachine@uefi-4G",
+   "ground_truth": "test",
+   "reference": "poo#204036"
+  },
+  {
+   "job_id": 6101411,
+   "test_name": "wsl2-install-msstore@win11_uefi",
+   "ground_truth": "test",
+   "reference": "poo#204075"
+  },
+  {
+   "job_id": 6119374,
+   "test_name": "openqa_install_full+publish@uefi-4G",
+   "ground_truth": "test",
+   "reference": "poo#204756"
+  },
+  {
+   "job_id": 6141875,
+   "test_name": "desktopapps-gnome@aarch64",
+   "ground_truth": "product",
+   "reference": "poo#204918"
+  },
+  {
+   "job_id": 6139409,
+   "test_name": "gnome@32bit",
+   "ground_truth": "test",
+   "reference": "poo#205077"
+  },
+  {
+   "job_id": 6152905,
+   "test_name": "textmode-extra@s390x-zVM-vswitch-l2",
+   "ground_truth": "test",
+   "reference": "poo#205314"
+  },
+  {
+   "job_id": 6154102,
+   "test_name": "openqa_from_containers@uefi-4G",
+   "ground_truth": "test",
+   "reference": "poo#205458"
+  },
+  {
+   "job_id": 6155745,
+   "test_name": "openqa_from_bootstrap@uefi-4G",
+   "ground_truth": "test",
+   "reference": "poo#205527"
+  },
+  {
+   "job_id": 6158077,
+   "test_name": "kde-live-wayland@64bit_virtio-4G",
+   "ground_truth": "test",
+   "reference": "poo#205569"
+  },
+  {
+   "job_id": 6172844,
+   "test_name": "desktop_browsers_xfce@uefi-3G",
+   "ground_truth": "test",
+   "reference": "poo#205860"
+  },
+  {
+   "job_id": 6189600,
+   "test_name": "openqa_install_multimachine@uefi-4G",
+   "ground_truth": "test",
+   "reference": "poo#206331"
+  },
+  {
+   "job_id": 6214908,
+   "test_name": "blktests_nvme@64bit",
+   "ground_truth": "test",
+   "reference": "poo#206997"
+  },
+  {
+   "job_id": 6228969,
+   "test_name": "desktopapps-gnome-wayland@aarch64",
+   "ground_truth": "product",
+   "reference": "poo#207282"
+  },
+  {
+   "job_id": 6234730,
+   "test_name": "xfce@64bit",
+   "ground_truth": "test",
+   "reference": "poo#207567"
+  },
+  {
+   "job_id": 6269420,
+   "test_name": "jeos-nosb@uefi_virtio-2G",
+   "ground_truth": "test",
+   "reference": "poo#208452"
+  },
+  {
+   "job_id": 6271017,
+   "test_name": "jeos@uefi-staging-virtio-2G",
+   "ground_truth": "infra",
+   "reference": "poo#208527"
+  },
+  {
+   "job_id": 6272994,
+   "test_name": "jeos-ltp-syscalls-ipc@uefi_virtio-2G",
+   "ground_truth": "test",
+   "reference": "poo#208620"
+  },
+  {
+   "job_id": 6276252,
+   "test_name": "apparmor@uefi",
+   "ground_truth": "test",
+   "reference": "poo#208752"
+  },
+  {
+   "job_id": 6276977,
+   "test_name": "salt-minion@uefi-3G",
+   "ground_truth": "test",
+   "reference": "poo#208758"
+  },
+  {
+   "job_id": 6287578,
+   "test_name": "jeos-extra@64bit_virtio-4G",
+   "ground_truth": "test",
+   "reference": "poo#209103"
+  },
+  {
+   "job_id": 6314991,
+   "test_name": "jeos-extra@aarch64-HD24G",
+   "ground_truth": "test",
+   "reference": "poo#209382"
+  },
+  {
+   "job_id": 6361728,
+   "test_name": "extra_tests_gnome@uefi-3G",
+   "ground_truth": "test",
+   "reference": "poo#209454"
+  },
+  {
+   "job_id": 6302407,
+   "test_name": "ltp_kernel_misc@64bit",
+   "ground_truth": "test",
+   "reference": "poo#209511"
+  },
+  {
+   "job_id": 6309133,
+   "test_name": "desktopapps-gnome@uefi",
+   "ground_truth": "test",
+   "reference": "poo#209634"
+  },
+  {
+   "job_id": 6314635,
+   "test_name": "gnome@aarch64_armv9",
+   "ground_truth": "test",
+   "reference": "poo#209751"
+  },
+  {
+   "job_id": 6336117,
+   "test_name": "openqa_from_containers@uefi-4G",
+   "ground_truth": "product",
+   "reference": "poo#209775"
+  },
+  {
+   "job_id": 6317892,
+   "test_name": "upgrade_Leap_15.1_gnome@aarch64",
+   "ground_truth": "test",
+   "reference": "poo#209802"
+  },
+  {
+   "job_id": 6323697,
+   "test_name": "openqa_install_multimachine@uefi-4G",
+   "ground_truth": "test",
+   "reference": "poo#209919"
+  },
+  {
+   "job_id": 6322787,
+   "test_name": "ltp_syscalls@ppc64le",
+   "ground_truth": "product",
+   "reference": "poo#209943"
+  },
+  {
+   "job_id": 6330666,
+   "test_name": "nfs_client@64bit",
+   "ground_truth": "product",
+   "reference": "poo#210051"
+  },
+  {
+   "job_id": 6333734,
+   "test_name": "blktests_block@64bit",
+   "ground_truth": "product",
+   "reference": "poo#210111"
+  },
+  {
+   "job_id": 6336075,
+   "test_name": "textmode_extra_tests_development@uefi-3G",
+   "ground_truth": "test",
+   "reference": "poo#210141"
+  },
+  {
+   "job_id": 6338598,
+   "test_name": "aeon_tests@uefi",
+   "ground_truth": "test",
+   "reference": "poo#210228"
+  },
+  {
+   "job_id": 6337714,
+   "test_name": "kselftests-cgroup@64bit",
+   "ground_truth": "test",
+   "reference": "poo#210405"
+  },
+  {
+   "job_id": 6344475,
+   "test_name": "nvme@uefi",
+   "ground_truth": "test",
+   "reference": "poo#210456"
+  },
+  {
+   "job_id": 6345502,
+   "test_name": "core_kde@uefi-3G",
+   "ground_truth": "product",
+   "reference": "poo#210471"
+  },
+  {
+   "job_id": 6354971,
+   "test_name": "cryptlvm_with_tpm@uefi-4G-TPM",
+   "ground_truth": "test",
+   "reference": "poo#210702"
+  },
+  {
+   "job_id": 6356162,
+   "test_name": "bci_openjdk_26_devel_podman@uefi",
+   "ground_truth": "test",
+   "reference": "poo#210705"
+  }
+ ]
+}

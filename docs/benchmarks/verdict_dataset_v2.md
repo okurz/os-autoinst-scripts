@@ -198,3 +198,24 @@ Consequence for plan 022: the labels are the tool's proposals with their confide
 verdict, and H4's bar is not met. A decision that hangs on a 12-point difference therefore needs the
 second instrument the plan names — a human spot-check of the disputed class — rather than this dataset
 alone.
+
+## Sampling for the re-score
+
+Re-scoring an existing arm run cannot measure this dataset: every recorded run covers the 50 v1 jobs, of
+which only 25 are v2 rows, 22 of them scored, spread over 6 tickets. The audited corpus is a different
+job selection, so an arm has to answer the v2 rows itself.
+
+`tests/data/eval_sample_v2_tickets.json` holds one row per scored ticket — 84 entries, the lowest job id
+of each ticket, 47 `test` / 35 `product` / 2 `infra` — which is the smallest sample that still gives the
+cluster bootstrap its 84 tickets:
+
+```sh
+scripts/benchmarking/run_investigate_eval.py --dataset tests/data/eval_sample_v2_tickets.json \
+  --llm-url http://w26:8082/v1/chat/completions --llm-model '<model>' \
+  --output /tmp/eval-v2-<arm>.json
+scripts/benchmarking/score_verdicts.py /tmp/eval-v2-<arm>.json --prediction-key verdict \
+  --labels tests/data/eval_dataset_v2.json --control /tmp/eval-v2-<control>.json
+```
+
+Rows inside a ticket are not independent, so adding the remaining scored rows of the same tickets buys no
+extra decisions; it only narrows nothing the ticket-majority figure does not already show.
