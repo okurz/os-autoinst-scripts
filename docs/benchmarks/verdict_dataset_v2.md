@@ -219,3 +219,50 @@ scripts/benchmarking/score_verdicts.py /tmp/eval-v2-<arm>.json --prediction-key 
 
 Rows inside a ticket are not independent, so adding the remaining scored rows of the same tickets buys no
 extra decisions; it only narrows nothing the ticket-majority figure does not already show.
+
+## Re-score
+
+Both arms answered the 84-ticket sample on 2026-11-27/28 in one session, `--dry`, nothing posted, on
+`openqaworker26`. The configuration differs from the plan's in one respect that matters:
+
+| Setting | Value |
+|---|---|
+| Server image | `ghcr.io/ggml-org/llama.cpp:server-b12627` (contains the `inkling2` and `inkling2_loop` merges) |
+| Server flags | production set: `--threads 64 --ctx-size 65536 --cache-ram 65536 -ctk q8_0 -ctv q8_0 -fa on --temp 1.0 --top-p 0.95 --top-k 64` |
+| Incumbent weights | `unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M` |
+| Candidate weights | `Mainline_Support/Inkling-2-Mini-UD-Q4_K_M.gguf_file`, 16.6 GB, renamed to `.gguf` per `../research/inkling2_mini.md` |
+| Concurrency | one request at a time |
+
+Concurrency is one because four parallel requests were measured first and made every job slower, not
+faster: per-job latency rose from 235 s to 470-586 s and 7 of 36 jobs hit the harness timeout, since the
+host has 64 cores and the two servers share them with the live production container on port 8080. A
+detached resumable run (one job per process, results written per job) replaced the parallel chunks.
+
+The candidate ran the tool as committed, not at effort 0.1 with `--no-reasoning-preserve`: this harness'
+`openqa-llm-investigate` has no reasoning-effort flag, so that configuration cannot be reproduced from
+this checkout. Both arms therefore answer with the same prompts and the same classification rules, and
+the comparison is the model's, which is what the decision needs.
+
+| Arm | Accuracy over 84 tickets | Answered | Timeouts | Median job | Total compute |
+|---|---|---|---|---|---|
+| incumbent `gemma-4-26B-A4B` | **51.2%** — CI [40.5%, 60.7%] | 82/84 | 2 | 235 s | 6.6 h |
+| candidate `Inkling-2-Mini` | **50.0%** — CI [39.3%, 60.7%] | 77/84 | 7 | 374 s | 10.1 h |
+
+Paired comparison over the same 84 tickets: **-1.2 points in favour of the incumbent, CI [-13.1, +11.9]**.
+The arms agree on 52 of 84 rows, each answers 14 or 15 rows the other gets wrong, and 28 rows are right in
+both. Neither interval excludes the other, so the accuracy difference is **not separable at this sample
+size**: a paired difference has to exceed roughly 12 points to separate here, and the measured one is 1.2.
+
+Both arms sit near the trivial baselines of this sample — answering `test` everywhere scores 56.0%, and
+answering `product` everywhere scores 41.7% — and the two arms fail differently: the incumbent predicts
+`product` on 66 of 84 rows against a truth of 35, while the candidate spreads its answers (46 `product`,
+28 `test`) and so finds 20 of the 47 test tickets instead of 10. Neither profile beats the always-`test`
+baseline, which is the finding the audited labels were built to expose: the 62.0% the incumbent reaches on
+the v1 tracker labels is a property of that sample, not of the model.
+
+The candidate is also slower on the same hardware: 374 s median against 235 s, 10.1 h against 6.6 h of
+wall clock for the same 84 jobs, at 6.7 tokens/s of decode against the incumbent's 23.5, and it abandons
+7 jobs to the harness timeout against 2.
+
+Run files are disposable (`/tmp/v2/parts/`, `/tmp/v2/{inc,cand}.json`); the candidate weights stay in
+`/opt/llm/models/inkling/` on the worker, no longer served, and the benchmark container is stopped.
