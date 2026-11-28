@@ -30,8 +30,12 @@ ANSWER = (
     b'{"choices":[{"message":{"content":"**LLM Investigation summary:**\\nProduct bug"}}],'
     b'"usage":{"prompt_tokens":8123}}'
 )
-REQUEST = {"model": "Inkling-2-Mini", "messages": [{"role": "user", "content": "prompt 1"}],
-           "temperature": 0.3, "top_p": 0.95}
+REQUEST = {
+    "model": "Inkling-2-Mini",
+    "messages": [{"role": "user", "content": "prompt 1"}],
+    "temperature": 0.3,
+    "top_p": 0.95,
+}
 URLOPEN = "scripts.benchmarking.params_proxy.urllib.request.urlopen"
 FORWARD = "scripts.benchmarking.params_proxy.forward"
 
@@ -101,14 +105,26 @@ class TestParseParams(unittest.TestCase):
 
     def test_accepted_values(self) -> None:
         cases: list[dict[str, Any]] = [
-            {"desc": "effort stays a string", "pairs": ["reasoning_effort=low"],
-             "expected": {"reasoning_effort": "low"}},
-            {"desc": "sampling values become floats", "pairs": ["top_p=1.0", "min_p=0.0"],
-             "expected": {"top_p": 1.0, "min_p": 0.0}},
-            {"desc": "count keys become ints", "pairs": ["top_k=0", "num_ctx=4096"],
-             "expected": {"top_k": 0, "num_ctx": 4096}},
-            {"desc": "several pairs merge in order", "pairs": ["reasoning_effort=high", "top_p=1.0"],
-             "expected": {"reasoning_effort": "high", "top_p": 1.0}},
+            {
+                "desc": "effort stays a string",
+                "pairs": ["reasoning_effort=low"],
+                "expected": {"reasoning_effort": "low"},
+            },
+            {
+                "desc": "sampling values become floats",
+                "pairs": ["top_p=1.0", "min_p=0.0"],
+                "expected": {"top_p": 1.0, "min_p": 0.0},
+            },
+            {
+                "desc": "count keys become ints",
+                "pairs": ["top_k=0", "num_ctx=4096"],
+                "expected": {"top_k": 0, "num_ctx": 4096},
+            },
+            {
+                "desc": "several pairs merge in order",
+                "pairs": ["reasoning_effort=high", "top_p=1.0"],
+                "expected": {"reasoning_effort": "high", "top_p": 1.0},
+            },
         ]
         for case in cases:
             with self.subTest(case["desc"]):
@@ -161,8 +177,12 @@ class TestTruncateMessages(unittest.TestCase):
         }
         cases: list[dict[str, Any]] = [
             {"desc": "zero keeps every message whole", "max_chars": 0, "merged": body, "lengths": [50, 5]},
-            {"desc": "a limit cuts the long message and keeps the short one",
-             "max_chars": 10, "merged": body, "lengths": [10, 5]},
+            {
+                "desc": "a limit cuts the long message and keeps the short one",
+                "max_chars": 10,
+                "merged": body,
+                "lengths": [10, 5],
+            },
         ]
         for case in cases:
             with self.subTest(case["desc"]):
@@ -188,8 +208,11 @@ class TestUsageOf(unittest.TestCase):
 
     def test_usage(self) -> None:
         cases: list[dict[str, Any]] = [
-            {"desc": "usage counters are read from the completion payload", "payload": ANSWER,
-             "expected": {"prompt_tokens": 8123}},
+            {
+                "desc": "usage counters are read from the completion payload",
+                "payload": ANSWER,
+                "expected": {"prompt_tokens": 8123},
+            },
             {"desc": "an upstream error page yields no counters", "payload": b"<html>502</html>", "expected": {}},
             {"desc": "a payload without usage yields no counters", "payload": b'{"choices": []}', "expected": {}},
             {"desc": "a non-object payload yields no counters", "payload": b"[1, 2]", "expected": {}},
