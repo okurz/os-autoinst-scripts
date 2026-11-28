@@ -39,6 +39,16 @@ We evaluated architectural, quantization, and context-size variations across the
 | **gemma-4-26B-A4B-it MTP** | `UD-Q4_K_M` + 0.43 GiB draft | 16.2 GiB | 3.8B / 25.2B (MoE) | 195 tok/s | n/a | **39.2 tok/s** | not separable (see below) | ~24.3 GiB |
 | **gemma-4-26B-A4B-it QAT** | `qat-UD-Q4_K_XL` | **13.27 GiB** | 3.8B / 25.2B (MoE) | 229 tok/s | n/a | 26.6 tok/s | not separable (see below) | ~21.3 GiB |
 | **gemma-4-26B-A4B-it QAT + MTP** | `qat-UD-Q4_K_XL` + 0.23 GiB draft | 13.5 GiB | 3.8B / 25.2B (MoE) | 225 tok/s | n/a | **50.1 tok/s** | not separable (see below) | ~21.6 GiB |
+| **Inkling-2-Mini** | `UD-Q4_K_M` (Mainline_Support) | 15.47 GiB | 3.4B / 26.2B (MoE, 48 loop slots) | 65.99-79.73 tok/s | n/a | 12.29-5.06 tok/s | **48.0%** (24/50) | not measured |
+| **gemma-4-26B-A4B-it** (control, same build) | `UD-Q4_K_M` | 15.8 GiB | 3.8B / 25.2B (MoE) | 257.9 tok/s (60-token probe) | n/a | 30.83 tok/s (60-token probe) | **62.0%** (31/50) | ~23.8 GiB |
+
+
+Inkling and its control row: n = 50 jobs, host w26, image `ghcr.io/ggml-org/llama.cpp:server-b12627`
+(build 12627, commit `225a5345b`), `openqa-llm-investigate` at revision `22575395`, temperature 0.3
+from the tool; the candidate ran with `reasoning_effort=minimal` (0.1) injected through
+`params_proxy.py`, the control direct and therefore at its template default. Throughput columns are the
+cold probes at 64 threads; the control's throughput was not re-measured at the large prompt sizes, only
+in a 60-token probe, and its recorded 68/23.5 tok/s row above is the build-8740 measurement.
 
 † Recorded 2026-11-17 on build 8740 with tool revision `5a9450bf` and **not reproducible**: the same
 build and weights score 62.0% (31/50) at tool `22575395` today, two runs agreeing verdict for verdict,

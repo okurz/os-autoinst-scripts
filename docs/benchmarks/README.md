@@ -3,6 +3,7 @@
 - [gemma4_verdict_regression.md](gemma4_verdict_regression.md) and [llm_verdict_dataset_audit.md](llm_verdict_dataset_audit.md): the verdict quality of `openqa-llm-investigate` on the 50-job dataset, and why its verdicts collapse to one class.
 - [gemma4_mtp_qat.md](gemma4_mtp_qat.md) and [gemma4_speculative_qat.md](gemma4_speculative_qat.md): the llama.cpp MTP draft-head and QAT-weight evaluation for the same model, with its dossier.
 - [gemma_26b_a4b.md](gemma_26b_a4b.md), [model_variations_benchmark.md](model_variations_benchmark.md), [ornith_9b_gsq_rco.md](ornith_9b_gsq_rco.md) and [swift_qwen38_27b.md](swift_qwen38_27b.md): the candidate record — the incumbent's baseline, the quantisation and context-size variations, and the two candidates that were measured and rejected.
+- [inkling2_mini.md](inkling2_mini.md) and [inkling2_mini_verdict.md](inkling2_mini_verdict.md): the looped-`inkling2_loop` candidate — throughput, deployment and effort handling, and its quality replay against a same-build control.
 
 ## Verdict reference caveat
 
