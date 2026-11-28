@@ -266,3 +266,47 @@ wall clock for the same 84 jobs, at 6.7 tokens/s of decode against the incumbent
 
 Run files are disposable (`/tmp/v2/parts/`, `/tmp/v2/{inc,cand}.json`); the candidate weights stay in
 `/opt/llm/models/inkling/` on the worker, no longer served, and the benchmark container is stopped.
+
+## Decision
+
+**Reject the Inkling-2-Mini candidate; keep `gemma-4-26B-A4B` on the pinned `b12627` build.**
+
+H2's bar was an interval that separates the arms. It does not: the paired difference is 1.2 points in the
+incumbent's favour with a 95% interval of [-13.1, +11.9] over 84 tickets, and each arm answers 14 or 15
+rows the other gets wrong. So the rejection does not rest on the accuracy comparison — it rests on the
+dimensions the sample does not have to resolve:
+
+| Dimension | Incumbent | Candidate |
+|---|---|---|
+| Accuracy over 84 audited tickets | 51.2% [40.5, 60.7] | 50.0% [39.3, 60.7] |
+| Median job | 235 s | 374 s |
+| Jobs lost to the harness timeout | 2 of 84 | 7 of 84 |
+| Deployed today | yes | no |
+| Extra operator work | none | 16.6 GB pre-pull plus a documented rename |
+
+A candidate that is 1.6x slower, abandons 3.5x more jobs, and needs a rename step has to buy accuracy to
+be worth adopting; it buys none.
+
+Effect size this sample can see, in the paired comparison that produced the interval above (half-width
+scales as the inverse square root of the ticket count, so read the table as sizing guidance):
+
+| Tickets | Separable paired difference |
+|---|---|
+| 50 | ~15 points |
+| 84 | ~12 points (measured) |
+| 150 | ~9 points |
+| 200 | ~8 points |
+| 400 | ~5.5 points |
+
+What the re-score changes is not the model choice but the number that justifies it. On ticket-diverse
+audited labels the incumbent reaches **51.2% [40.5, 60.7]**, not the 62.0% that the v1 tracker labels
+support, and it is **below the always-`test` baseline of 56.0%** on this sample, because it answers
+`product` on 66 of 84 rows against 35 product tickets. The single-class collapse that plan 006 described is
+therefore not a property of the 50-row sample: it survives a ticket-diverse, content-audited dataset, and
+it survives a second incumbent run. That makes the classification policy, not the model, the next lever,
+and the audited dataset the reference any later verdict number has to be measured against.
+
+One residual keeps this decision honest: the label policy reproduces on 16 of 20 rows against an
+independent reading, which is H4's bar unmet. A human spot-check of the disputed class stays the second
+instrument, and a re-run that separates two arms by less than ~12 points at this sample size would need it
+before it could justify adoption.

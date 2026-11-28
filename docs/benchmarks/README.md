@@ -4,6 +4,16 @@
 - [gemma4_mtp_qat.md](gemma4_mtp_qat.md) and [gemma4_speculative_qat.md](gemma4_speculative_qat.md): the llama.cpp MTP draft-head and QAT-weight evaluation for the same model, with its dossier.
 - [gemma_26b_a4b.md](gemma_26b_a4b.md), [model_variations_benchmark.md](model_variations_benchmark.md), [ornith_9b_gsq_rco.md](ornith_9b_gsq_rco.md) and [swift_qwen38_27b.md](swift_qwen38_27b.md): the candidate record — the incumbent's baseline, the quantisation and context-size variations, and the two candidates that were measured and rejected.
 
+## Verdict reference caveat
+
+Every verdict percentage in the records below is measured on `tests/data/eval_dataset.json`, whose 50 rows
+come from 7 tickets, one of them covering 21 rows. A ticket-content audit replaced those labels:
+`tests/data/eval_dataset_v2.json` holds 204 scored rows over 84 tickets under the written policy in
+`docs/research/verdict_label_policy.md`, and [verdict_dataset_v2.md](verdict_dataset_v2.md) records that
+the policy reproduces on 16 of 20 rows against an independent reading. Read the numbers below as the
+record of what was measured on that sample, not as a model ranking; the ticket-diverse comparison lives
+in that file.
+
 The benchmark harness is in `scripts/benchmarking/`: `deploy_candidate.sh` starts and stops an isolated candidate container on an openQA worker, `fetch_eval_dataset.py` builds the dataset from the API, and `bench_throughput.py`, `run_investigate_eval.py`, `compare_spec_outputs.py` and `score_verdicts.py` measure it.
 
 The design and the decision it serves are in [../spec/SPEC-cpu-llm-benchmarking.md](../spec/SPEC-cpu-llm-benchmarking.md) and [../intent/cpu-only-llm-models-o3.md](../intent/cpu-only-llm-models-o3.md); the background reads

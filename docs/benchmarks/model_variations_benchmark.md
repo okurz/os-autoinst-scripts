@@ -7,6 +7,9 @@
 - **Integration**: `openqa-llm-investigate` via the evaluation harness in os-autoinst-scripts (`scripts/benchmarking/run_investigate_eval.py`)
 - **Accuracy basis**: re-measured 2026-11-20 at tool revision `22575395` (see the note under the
   matrix and the verdict re-baseline in os-autoinst-scripts (`docs/benchmarks/gemma4_verdict_regression.md`)); latency figures are the 2026-11-17 ones
+- **Label caveat**: the 50-row basis rests on 7 tickets and the tracker mapping (Bugzilla -> `product`,
+  progress -> `test`). The ticket-diverse audited dataset and its re-score are in
+  `verdict_dataset_v2.md`; those figures supersede these accuracy numbers for any model decision.
 
 ---
 
